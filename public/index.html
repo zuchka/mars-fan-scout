@@ -8,7 +8,7 @@
   <title>Mars Fan Scout — Field Station 04</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="stylesheet" href="/scout.css">
-  <script type="module" src="/scout.js?v=5"></script>
+  <script type="module" src="/scout.js?v=6"></script>
 </head>
 <body>
   <div class="grain" aria-hidden="true"></div>
@@ -23,6 +23,12 @@
         <div class="eyebrow"><span class="eyebrow-line"></span> THE MISSION</div>
         <h1>Find what <br>the map <em>missed.</em></h1>
         <p class="intro">Seasonal dust fans leave dark traces across Mars’s spring ice. Give Roboflow a new image; review what it finds.</p>
+        <form class="access-card" id="access-card" hidden>
+          <span>LIVE DEMO ACCESS</span>
+          <p>Enter the meeting code to run Roboflow scans. Image browsing and the evidence review remain open.</p>
+          <div><input id="access-code" type="password" autocomplete="off" placeholder="Access code" aria-label="Demo access code" required><button type="submit">Unlock ↗</button></div>
+          <small id="access-message" role="status" aria-live="polite"></small>
+        </form>
         <div class="section-title"><span>01 / SOURCE IMAGE</span><span class="section-rule"></span></div>
         <button type="button" class="sample-card" id="load-sample">
           <span class="sample-image" aria-hidden="true"></span>

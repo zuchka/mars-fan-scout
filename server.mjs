@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve, extname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { createDemoAccess } from "./demo-access.mjs";
 
 const root = resolve(fileURLToPath(new URL(".", import.meta.url)));
 const publicDir = resolve(root, "public");
@@ -21,6 +22,13 @@ const configured = !!apiKey && modelIdValid;
 const training = process.env.ROBOFLOW_MODEL_TRAINING === "1";
 const replay = process.env.ROBOFLOW_REPLAY === "1";
 const port = Number(process.env.PORT || 4173);
+const host = process.env.HOST || "127.0.0.1";
+const dailyLimit = Number(process.env.DEMO_DAILY_LIMIT || 0);
+if (!Number.isSafeInteger(dailyLimit) || dailyLimit < 0) throw new Error("DEMO_DAILY_LIMIT must be a nonnegative integer");
+const access = createDemoAccess({ code:process.env.DEMO_ACCESS_CODE || "", dailyLimit, usagePath:resolve(root, ".demo-usage.json") });
+if (!["127.0.0.1", "localhost", "::1"].includes(host) && (!access.accessRequired || dailyLimit === 0)) {
+  throw new Error("Network binding requires DEMO_ACCESS_CODE and a positive DEMO_DAILY_LIMIT");
+}
 const mime = { ".html":"text/html; charset=utf-8", ".js":"text/javascript; charset=utf-8", ".mjs":"text/javascript; charset=utf-8", ".css":"text/css; charset=utf-8", ".json":"application/json; charset=utf-8", ".jpg":"image/jpeg", ".jpeg":"image/jpeg", ".png":"image/png", ".webp":"image/webp", ".svg":"image/svg+xml" };
 const sceneData = JSON.parse(readFileSync(resolve(publicDir, "scenes.json"), "utf8"));
 const sceneAssets = new Map(sceneData.map(scene => [scene.id, scene.image]));
@@ -104,7 +112,8 @@ const server = createServer(async (request, response) => {
   try {
     const url = new URL(request.url, "http://localhost");
     if (request.method === "GET" && url.pathname === "/api/status") {
-      return send(response, 200, { ready, scout_ready:configured && !training && !replay, configured, training:training && !replay, mode:replay ? "recorded" : "live", model_id:modelIdValid ? modelId : null });
+      const granted = access.authorized(request.headers["x-demo-access-code"]);
+      return send(response, 200, { ready, scout_ready:configured && !training && !replay, configured, training:training && !replay, mode:replay ? "recorded" : "live", model_id:modelIdValid ? modelId : null, access_required:access.accessRequired, access_granted:granted, daily_remaining:granted ? access.remaining() : null });
     }
     if (request.method === "GET" && url.pathname === "/api/scout/evaluation") {
       try {
@@ -119,17 +128,23 @@ const server = createServer(async (request, response) => {
       } catch (_) { return send(response, 404, { error:"No independent review is available yet" }); }
     }
     if (request.method === "POST" && url.pathname === "/api/scout/infer") {
+      if (!access.authorized(request.headers["x-demo-access-code"])) return send(response, 401, { error:"Enter the demo access code to scan" });
       if (!configured || training || replay) return send(response, 503, { error:"Live Roboflow inference is unavailable" });
       let image;
       try { image = await readImage(request); }
       catch (error) { return send(response, 400, { error:error.message }); }
+      if (!access.reserve()) return send(response, 429, { error:"The demo has reached its daily scan limit" });
       const result = await inferImage(image);
       return send(response, result.status, result.body);
     }
     if (request.method === "POST" && url.pathname === "/api/infer") {
+      if (!access.authorized(request.headers["x-demo-access-code"])) return send(response, 401, { error:"Enter the demo access code to scan" });
       let input;
       try { input = await readBody(request); }
       catch (_) { return send(response, 400, { error:"Invalid inference request" }); }
+      if (!input || !sceneAssets.has(input.sceneId)) return send(response, 404, { error:"Unknown observation" });
+      if (!ready) return send(response, 503, { error:"Roboflow model is not connected" });
+      if (!replay && !access.reserve()) return send(response, 429, { error:"The demo has reached its daily scan limit" });
       const result = await infer(input.sceneId);
       return send(response, result.status, result.body);
     }
@@ -147,7 +162,7 @@ const server = createServer(async (request, response) => {
   }
 });
 
-server.listen(port, "127.0.0.1", () => {
-  process.stdout.write("Mars Fan Scout ready at http://127.0.0.1:" + port + "\n");
+server.listen(port, host, () => {
+  process.stdout.write("Mars Fan Scout ready at http://" + host + ":" + port + "\n");
   process.stdout.write(replay ? (ready ? "Recorded Roboflow inference ready\n" : "Recorded results missing\n") : (training ? "Roboflow model training\n" : (ready ? "Roboflow model configured\n" : "Reference mode: Roboflow model not configured\n")));
 });

@@ -2,6 +2,8 @@
 
 A live, human-in-the-loop Mars image review demo. Upload a compatible south-polar HiRISE crop, or use the bundled 2024 crop. The app sends image tiles to a Roboflow instance-segmentation model, places its predicted masks back on the source image, and lets a person accept, reject, or flag each candidate. The primary workflow makes **no Planet Four catalog lookup**. The original catalog-guided Mars Weather Report remains at `/archive.html` as a historical comparison.
 
+For a shared Fly Sprite deployment, use [DEPLOY_SPRITES.md](DEPLOY_SPRITES.md). A meeting access code and a persistent daily tile limit protect live Roboflow inference; neither is required for local development.
+
 ## Run the demo
 
 From this directory:

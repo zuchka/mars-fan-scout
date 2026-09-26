@@ -308,7 +308,8 @@ async function runModel() {
   $("frame-status").textContent = state.modelRecorded ? "REPLAYING MODEL OUTPUT" : "ROBOFLOW SCANNING";
   let failed = false;
   try {
-    const response = await fetch("/api/infer", { method:"POST", headers:{"content-type":"application/json"}, body:JSON.stringify({sceneId:inferenceScene.id}) });
+    const accessCode = sessionStorage.getItem("mars-fan-scout-access") || "";
+    const response = await fetch("/api/infer", { method:"POST", headers:{"content-type":"application/json", ...(accessCode ? {"x-demo-access-code":accessCode} : {})}, body:JSON.stringify({sceneId:inferenceScene.id}) });
     const payload = await response.json();
     if (!response.ok) throw new Error(payload.error || "Inference failed");
     if (scene()?.id !== inferenceScene.id) return;
@@ -336,9 +337,10 @@ async function runModel() {
 
 async function checkModel() {
   try {
-    const response = await fetch("/api/status");
+    const accessCode = sessionStorage.getItem("mars-fan-scout-access") || "";
+    const response = await fetch("/api/status", {headers:accessCode ? {"x-demo-access-code":accessCode} : {}});
     const status = await response.json();
-    state.modelReady = !!status.ready;
+    state.modelReady = !!status.ready && !!status.access_granted && (status.mode === "recorded" || status.daily_remaining !== 0);
     state.modelTraining = !!status.training;
     state.modelRecorded = status.mode === "recorded";
   } catch (_) { state.modelReady = false; }

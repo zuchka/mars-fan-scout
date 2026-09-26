@@ -7,3 +7,5 @@ __pycache__/
 *.pyc
 training/*.zip
 data/
+.demo-usage.json
+.sprite/

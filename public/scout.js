@@ -16,11 +16,13 @@ const SAMPLE = {
 };
 const state = {
   canvas:null, imageURL:null, file:null, meta:null, hash:null, predictions:[],
-  selected:null, threshold:.35, modelId:null, modelReady:false,
+  selected:null, threshold:.35, modelId:null, modelReady:false, accessRequired:false, accessGranted:true, dailyRemaining:null,
   scanning:false, scanToken:0, controller:null, thumbnailCache:new Map(), hasRevealed:false
 };
 const $ = id => document.getElementById(id);
 const number = value => Number(value).toLocaleString();
+const accessCode = () => { try { return sessionStorage.getItem("mars-fan-scout-access") || ""; } catch (_) { return ""; } };
+const accessHeaders = () => accessCode() ? { "x-demo-access-code":accessCode() } : {};
 
 function toast(message) {
   const node = $("toast");
@@ -40,11 +42,15 @@ function setStep(step) {
 
 async function modelStatus() {
   try {
-    const response = await fetch("/api/status");
+    const response = await fetch("/api/status", { headers:accessHeaders() });
     const result = await response.json();
-    state.modelReady = !!result.scout_ready;
+    state.accessRequired = !!result.access_required;
+    state.accessGranted = !!result.access_granted;
+    state.dailyRemaining = result.daily_remaining;
+    state.modelReady = !!result.scout_ready && state.accessGranted && result.daily_remaining !== 0;
     state.modelId = result.model_id;
-    $("status-text").textContent = result.scout_ready ? "MODEL CONNECTED" : (result.mode === "recorded" ? "LIVE MODEL REQUIRED" : "MODEL UNAVAILABLE");
+    $("access-card").hidden = !state.accessRequired || state.accessGranted;
+    $("status-text").textContent = !state.accessGranted ? "ACCESS CODE REQUIRED" : result.daily_remaining === 0 ? "SCAN LIMIT REACHED" : result.scout_ready ? "MODEL CONNECTED" : (result.mode === "recorded" ? "LIVE MODEL REQUIRED" : "MODEL UNAVAILABLE");
     $("model-status").classList.toggle("ready", state.modelReady);
   } catch (_) {
     state.modelReady = false;
@@ -71,7 +77,7 @@ function updateScanButton() {
   const button = $("scan-button");
   button.disabled = !state.canvas || !state.modelReady || state.scanning;
   button.classList.toggle("busy", state.scanning);
-  button.innerHTML = (state.scanning ? "Scanning Mars…" : !state.canvas ? "Load an image first" : !state.modelReady ? "Connect Roboflow" : state.predictions.length ? "Scan again" : "Scan with Roboflow") + ' <span aria-hidden="true">↗</span>';
+  button.innerHTML = (state.scanning ? "Scanning Mars…" : !state.canvas ? "Load an image first" : !state.accessGranted ? "Enter access code" : state.dailyRemaining === 0 ? "Daily limit reached" : !state.modelReady ? "Connect Roboflow" : state.predictions.length ? "Scan again" : "Scan with Roboflow") + ' <span aria-hidden="true">↗</span>';
 }
 
 function imageDigest(file, scale) {
@@ -261,6 +267,7 @@ async function runScan() {
   const tiles=tilesForCanvas(state.canvas);
   let next=0, completed=0, failures=0;
   const collected=[];
+  let accessFailure="";
   $("image-wrap").classList.add("scanning");
   $("scan-progress").hidden=false;
   $("progress-fill").style.width="0%";
@@ -283,8 +290,9 @@ async function runScan() {
       crop.getContext("2d").drawImage(state.canvas,tile.x,tile.y,tile.width,tile.height,0,0,tile.width,tile.height);
       try {
         const blob=await canvasBlob(crop);
-        const response=await fetch("/api/scout/infer",{method:"POST",headers:{"content-type":"image/jpeg"},body:blob,signal:controller.signal});
+        const response=await fetch("/api/scout/infer",{method:"POST",headers:{"content-type":"image/jpeg",...accessHeaders()},body:blob,signal:controller.signal});
         const data=await response.json();
+        if (response.status===401 || response.status===429) accessFailure=data.error || "Scan access unavailable";
         if (!response.ok) throw new Error(data.error||"Inference failed");
         if (token===state.scanToken) collected.push(...normalizePredictions(data,tile));
       } catch (error) {
@@ -307,7 +315,7 @@ async function runScan() {
   if (failures===tiles.length) {
     $("image-top-label").textContent="SCAN FAILED";
     $("review-intro").textContent="Roboflow did not return results. Check the connection and try again.";
-    toast("The Roboflow scan failed. Please try again.");
+    toast(accessFailure || "The Roboflow scan failed. Please try again.");
     setStep("source");
   } else {
     state.predictions=mergePredictions(collected);
@@ -320,6 +328,7 @@ async function runScan() {
   }
   render();
   updateScanButton();
+  if (accessFailure) modelStatus();
 }
 
 function visiblePredictions() { return state.predictions.filter(item=>item.confidence>=state.threshold); }
@@ -620,6 +629,14 @@ function init() {
     render();
   });
   $("scan-button").addEventListener("click",runScan);
+  $("access-card").addEventListener("submit",async event=>{
+    event.preventDefault();
+    const code=$("access-code").value.trim();
+    try { sessionStorage.setItem("mars-fan-scout-access",code); } catch (_) {}
+    await modelStatus();
+    $("access-message").textContent=state.accessGranted ? "Access granted for this browser session." : "That code did not unlock scanning.";
+    if (state.accessGranted) toast("Live scans unlocked.");
+  });
   $("confidence-slider").addEventListener("input",event=>{state.threshold=Number(event.target.value)/100;$("confidence-value").textContent=event.target.value+"%";render()});
   $("accept-button").addEventListener("click",()=>review("accepted"));
   $("reject-button").addEventListener("click",()=>review("rejected"));
