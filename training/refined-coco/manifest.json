@@ -1,0 +1,21 @@
+{
+  "source": "Planet Four v3.1 catalog + HiRISE",
+  "label_type": "catalog-guided adaptive dark-mask weak labels",
+  "splits": {
+    "train": {
+      "images": 68,
+      "original_labels": 3758,
+      "refined_labels": 1813
+    },
+    "valid": {
+      "images": 9,
+      "original_labels": 733,
+      "refined_labels": 386
+    },
+    "test": {
+      "images": 9,
+      "original_labels": 727,
+      "refined_labels": 407
+    }
+  }
+}

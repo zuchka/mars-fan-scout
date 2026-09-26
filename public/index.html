@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0a1119">
+  <meta name="description" content="Roboflow-assisted review of seasonal fan candidates in Mars HiRISE imagery.">
+  <title>Mars Fan Scout — Field Station 04</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="stylesheet" href="/scout.css">
+  <script type="module" src="/scout.js?v=5"></script>
+</head>
+<body>
+  <div class="grain" aria-hidden="true"></div>
+  <div class="app">
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="Mars Fan Scout home"><span class="brand-orbit" aria-hidden="true"><i></i></span><span><b>MARS</b><small>FAN SCOUT</small></span></a>
+      <div class="topbar-center"><span class="orbit-dot"></span> FIELD STATION 04 <span class="slash">/</span> IMAGE REVIEW SYSTEM</div>
+      <div class="topbar-right"><a class="archive-link" href="/archive.html">Historical atlas ↗</a><div class="status-pill" id="model-status"><span class="status-light"></span><span id="status-text">Checking Roboflow</span></div></div>
+    </header>
+    <main class="layout">
+      <aside class="left-rail" aria-label="Image source">
+        <div class="eyebrow"><span class="eyebrow-line"></span> THE MISSION</div>
+        <h1>Find what <br>the map <em>missed.</em></h1>
+        <p class="intro">Seasonal dust fans leave dark traces across Mars’s spring ice. Give Roboflow a new image; review what it finds.</p>
+        <div class="section-title"><span>01 / SOURCE IMAGE</span><span class="section-rule"></span></div>
+        <button type="button" class="sample-card" id="load-sample">
+          <span class="sample-image" aria-hidden="true"></span>
+          <span class="sample-content"><span class="sample-kicker">READY TO EXPLORE <span class="sample-arrow">↗</span></span><strong>Spiders in Manhattan</strong><small>HiRISE · 03 FEB 2024<br>ESP_082142_0935</small></span>
+        </button>
+        <p class="sample-context">A 2024 crop from outside the Planet Four catalog’s years. This observation was not used for model training.</p>
+        <a class="source-link" href="https://hirise.lpl.arizona.edu/ESP_082142_0935" target="_blank" rel="noopener">VIEW NASA SOURCE <span aria-hidden="true">↗</span></a>
+        <label class="upload-box" id="upload-box" for="image-input">
+          <input id="image-input" type="file" accept="image/jpeg,image/png,image/webp" hidden>
+          <span class="upload-glyph" aria-hidden="true">↥</span>
+          <strong>Drop a Mars image here</strong>
+          <small>or click to choose a JPG, PNG, or WebP crop</small>
+          <span class="upload-limit">MAX 8 MB · UP TO 3072 PX / SIDE</span>
+        </label>
+        <div class="scale-control">
+          <label for="source-scale">SOURCE PIXEL SCALE</label>
+          <select id="source-scale"><option value="1">1 m / pixel</option><option value="0.5">0.5 m / pixel</option><option value="0.25">0.25 m / pixel</option><option value="unknown">Unknown scale</option></select>
+          <p>For map-projected HiRISE crops. Known scales are normalized to the model’s 1 m/pixel training images.</p>
+        </div>
+        <div class="north-control"><label for="north-angle">NORTH IN IMAGE <span>OPTIONAL</span></label><div class="north-entry"><input id="north-angle" type="number" min="0" max="359.9" step="0.1" placeholder="e.g. 90"><span>° CLOCKWISE FROM TOP</span></div><p id="north-hint">For uploaded crops, supply north orientation to show compass bearings. Otherwise arrows stay image-relative.</p></div>
+        <div class="rail-note"><span class="note-diamond"></span><p>Predictions are review candidates, not confirmed discoveries or a weather forecast.</p></div>
+      </aside>
+      <section class="center-stage" aria-label="Image scan">
+        <div class="stage-heading"><div><div class="eyebrow" id="image-eyebrow">FIELD IMAGE <span class="slash">/</span> AWAITING INPUT</div><h2 id="image-title">A new image. An open question.</h2></div><div class="image-id" id="image-id">—</div></div>
+        <div class="image-area" id="image-area">
+          <div class="empty-state" id="empty-state"><div class="empty-orbit" aria-hidden="true"><span></span></div><span class="eyebrow">AWAITING FIELD IMAGE</span><strong>What’s hiding in the ice?</strong><p>Load the 2024 observation or submit a compatible HiRISE crop to begin.</p></div>
+          <div class="image-wrap" id="image-wrap" hidden>
+            <img id="field-image" alt="Selected Mars orbital crop">
+            <svg id="mask-overlay" class="mask-overlay" aria-label="Model candidate masks"></svg>
+            <svg id="direction-overlay" class="direction-overlay" aria-label="Reviewer-confirmed dust-travel directions"></svg>
+            <svg id="tile-overlay" class="tile-overlay" aria-hidden="true"></svg>
+            <div class="scan-beam" aria-hidden="true"></div>
+            <div class="image-corner tl"></div><div class="image-corner tr"></div><div class="image-corner bl"></div><div class="image-corner br"></div>
+            <div class="image-top-label" id="image-top-label">SOURCE PIXELS · NO MODEL OUTPUT</div>
+            <div class="image-bottom-label"><span id="image-resolution">—</span><span id="image-scale">—</span></div>
+          </div>
+        </div>
+        <div class="scan-control"><div><span class="scan-kicker">THE PROCESS</span><div class="process-steps"><span class="process-step active" id="step-source"><b>01</b> Source</span><i></i><span class="process-step" id="step-scan"><b>02</b> Roboflow scan</span><i></i><span class="process-step" id="step-review"><b>03</b> Human review</span></div></div><button type="button" class="scan-button" id="scan-button" disabled>Load an image first <span aria-hidden="true">↗</span></button></div>
+        <div class="scan-progress" id="scan-progress" hidden><span id="progress-label">Scanning tile 1 of 1</span><div class="progress-track"><span id="progress-fill"></span></div><span id="progress-percent">0%</span></div>
+        <div class="stage-caption"><span id="caption-left">Original pixels remain visible beneath every model outline.</span><span id="caption-right">IMAGE: NASA / JPL-CALTECH / UARIZONA</span></div>
+      </section>
+      <aside class="right-rail" aria-label="Candidate review">
+        <div class="review-head"><span class="eyebrow"><span class="small-diamond"></span> DECISION DESK</span><span class="review-index">REPORT / 001</span></div>
+        <h2>From pixels <br>to <em>evidence.</em></h2>
+        <p class="review-intro" id="review-intro">Run a live scan to see the model’s candidates. Every decision you make stays visible in the review record.</p>
+        <div class="metric-row"><div class="metric"><span>CANDIDATES</span><strong id="candidate-count">—</strong></div><div class="metric"><span>REVIEWED</span><strong id="reviewed-count">—</strong></div><div class="metric"><span id="area-label">EST. AREA · M²</span><strong id="area-count">—</strong></div></div>
+        <div class="review-tools"><span>CANDIDATE QUEUE <b id="queue-total">00</b></span><label for="confidence-slider">MIN CONFIDENCE <b id="confidence-value">35%</b></label><input id="confidence-slider" type="range" min="20" max="80" value="35" step="5"></div>
+        <div class="candidate-list" id="candidate-list"><div class="queue-empty"><span>◌</span><p>The review queue will appear after a live scan.</p></div></div>
+        <div class="evidence-panel" id="evidence-panel" hidden><div class="evidence-head"><span>SELECTED EVIDENCE</span><span id="evidence-id">—</span></div><div class="evidence-body"><canvas id="evidence-crop" width="140" height="140" aria-label="Zoomed source pixels and possible source ends A and B"></canvas><div><strong id="evidence-confidence">—</strong><span>MODEL CONFIDENCE</span><strong id="evidence-area">—</strong><span>EST. MASK AREA</span></div></div><p>Review the source image, not just the outline. A dark shape may have another explanation.</p><div class="decision-buttons"><button id="accept-button" type="button">✓ Accept</button><button id="reject-button" type="button">× Reject</button><button id="unsure-button" type="button">? Unsure</button></div><div class="direction-picker"><span>02 / INFER DUST DIRECTION</span><p id="direction-instruction">Accept a fan, then identify which end of its mask is the source. The other end is the estimated downwind direction.</p><div class="origin-buttons"><button id="origin-a-button" type="button" disabled>A is source</button><button id="origin-b-button" type="button" disabled>B is source</button><button id="origin-clear-button" type="button" disabled>Clear</button></div><strong id="direction-result">No direction assigned</strong></div></div>
+        <div class="wind-panel" id="wind-panel" hidden><div class="wind-head"><span>REVIEWED DUST DIRECTIONS</span><span id="wind-count">0 FANS</span></div><div class="wind-content"><svg id="wind-rose" viewBox="0 0 160 160" role="img" aria-label="Directional distribution of accepted fans"></svg><div><strong id="wind-heading">—</strong><span id="wind-subheading">Awaiting reviewed fans</span><p id="wind-detail">Only accepted masks with a reviewer-selected source end contribute.</p></div></div><p class="wind-caveat">Fan direction records dust travel when the deposit formed. It is neither a current forecast nor a wind-speed measurement.</p></div>
+        <div class="export-actions"><button type="button" class="export-button" id="export-button" disabled>Download review JSON <span aria-hidden="true">↓</span></button><button type="button" class="copy-button" id="copy-button" disabled>View / copy JSON <span aria-hidden="true">↗</span></button></div>
+        <div class="review-json-panel" id="review-json-panel" hidden><label for="review-json">REVIEW RECORD · SELECT ALL TO COPY</label><textarea id="review-json" readonly spellcheck="false"></textarea><button type="button" id="copy-json-button">Copy to clipboard</button></div>
+        <div class="field-check" id="field-check" hidden><div class="field-check-head"><span>HELD-OUT IMAGE CHECK</span><span>2024 · UNSEEN ORBIT</span></div><div class="field-check-main"><strong id="field-check-ratio">—</strong><span>displayed candidates near a clear hand-marked deposit</span></div><p id="field-check-detail">—</p><details><summary>How was this checked?</summary><p id="field-check-method">—</p></details></div>
+        <div class="provenance"><span>PROVENANCE</span><p id="provenance-text">Image source, model version, and reviewer decisions will travel with the export.</p></div>
+      </aside>
+    </main>
+    <footer class="footer"><span>FIELD STATION 04 <span class="slash">/</span> HUMAN-IN-THE-LOOP PLANETARY IMAGE REVIEW</span><span>IMAGE: NASA / JPL-CALTECH / UARIZONA <span class="slash">·</span> MODEL: ROBOFLOW</span></footer>
+  </div>
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+</body>
+</html>

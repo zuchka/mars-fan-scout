@@ -1,0 +1,16 @@
+{
+  "observation": "ESP_082241_0950",
+  "source": "https://hirise.lpl.arizona.edu/ESP_082241_0950",
+  "model_id_frozen_before_review": "matt-abrams/mars-polar-fan-masks-1-rfdetr-seg-small-t1",
+  "confidence_threshold_frozen_before_review": 0.35,
+  "method": "Non-expert visual mark-up of clear, complete dark fan-like deposits from six 1024 px crops before viewing any model predictions. Points are approximate deposit centers. Cropped-off edge deposits and ambiguous shadow-like marks are excluded.",
+  "matching_tolerance_px": 75,
+  "crops": [
+    {"id":"locked-01","points_px":[[250,210],[800,320],[743,699]],"uncertain_regions_px":[[76,426,75],[24,592,75],[411,984,90]]},
+    {"id":"locked-02","points_px":[[648,430],[834,563],[979,568]],"uncertain_regions_px":[[414,0,65],[862,34,90]]},
+    {"id":"locked-03","points_px":[[653,170],[280,405],[393,793]],"uncertain_regions_px":[]},
+    {"id":"locked-04","points_px":[],"uncertain_regions_px":[[590,20,115],[710,812,90]]},
+    {"id":"locked-05","points_px":[[260,475],[332,567],[930,470],[767,795]],"uncertain_regions_px":[]},
+    {"id":"locked-06","points_px":[[235,210],[884,458],[637,850]],"uncertain_regions_px":[[970,854,100]]}
+  ]
+}

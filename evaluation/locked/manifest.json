@@ -1,0 +1,92 @@
+[
+  {
+    "id": "locked-01",
+    "observation": "ESP_082241_0950",
+    "source_raw_bounds": [
+      11264,
+      6144,
+      13312,
+      8192
+    ],
+    "source_scale_m_per_pixel": 0.5,
+    "working_scale_m_per_pixel": 1,
+    "image": "images/locked-01.jpg",
+    "width": 1024,
+    "height": 1024
+  },
+  {
+    "id": "locked-02",
+    "observation": "ESP_082241_0950",
+    "source_raw_bounds": [
+      11264,
+      8192,
+      13312,
+      10240
+    ],
+    "source_scale_m_per_pixel": 0.5,
+    "working_scale_m_per_pixel": 1,
+    "image": "images/locked-02.jpg",
+    "width": 1024,
+    "height": 1024
+  },
+  {
+    "id": "locked-03",
+    "observation": "ESP_082241_0950",
+    "source_raw_bounds": [
+      3072,
+      14336,
+      5120,
+      16384
+    ],
+    "source_scale_m_per_pixel": 0.5,
+    "working_scale_m_per_pixel": 1,
+    "image": "images/locked-03.jpg",
+    "width": 1024,
+    "height": 1024
+  },
+  {
+    "id": "locked-04",
+    "observation": "ESP_082241_0950",
+    "source_raw_bounds": [
+      7168,
+      17920,
+      9216,
+      19968
+    ],
+    "source_scale_m_per_pixel": 0.5,
+    "working_scale_m_per_pixel": 1,
+    "image": "images/locked-04.jpg",
+    "width": 1024,
+    "height": 1024
+  },
+  {
+    "id": "locked-05",
+    "observation": "ESP_082241_0950",
+    "source_raw_bounds": [
+      14336,
+      4096,
+      16384,
+      6144
+    ],
+    "source_scale_m_per_pixel": 0.5,
+    "working_scale_m_per_pixel": 1,
+    "image": "images/locked-05.jpg",
+    "width": 1024,
+    "height": 1024
+  },
+  {
+    "id": "locked-06",
+    "observation": "ESP_082241_0950",
+    "source_raw_bounds": [
+      19456,
+      6144,
+      21504,
+      8192
+    ],
+    "source_scale_m_per_pixel": 0.5,
+    "working_scale_m_per_pixel": 1,
+    "image": "images/locked-06.jpg",
+    "width": 1024,
+    "height": 1024
+  }
+]

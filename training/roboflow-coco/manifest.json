@@ -1,0 +1,23 @@
+{
+  "source_catalog": "https://zenodo.org/records/20054589",
+  "label_type": "approximate Planet Four fan wedges",
+  "split_policy": "observation-level",
+  "splits": {
+    "train": {
+      "observations": [
+        "ESP_011296_0975",
+        "ESP_011404_0945",
+        "ESP_011351_0945"
+      ],
+      "images": 68,
+      "fan_polygons": 3758
+    },
+    "valid": {
+      "observations": [
+        "ESP_020146_0950"
+      ],
+      "images": 18,
+      "fan_polygons": 1460
+    }
+  }
+}

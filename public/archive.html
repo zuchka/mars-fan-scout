@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#080f16">
+  <meta name="description" content="Explore wind direction inferred from seasonal fan deposits in HiRISE images of Mars.">
+  <title>Mars Weather Report</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="stylesheet" href="/styles.css">
+  <script defer src="/app.js"></script>
+</head>
+<body>
+  <div class="ambient ambient-one" aria-hidden="true"></div>
+  <div class="ambient ambient-two" aria-hidden="true"></div>
+  <div class="shell">
+    <header class="topbar">
+      <div class="brand" aria-label="Mars Weather Report">
+        <span class="brand-mark" aria-hidden="true"><span></span></span>
+        <span class="brand-type"><strong>MARS</strong><em>WEATHER REPORT</em></span>
+      </div>
+      <div class="topbar-center">SOUTH POLAR FIELD NOTES <span class="topbar-sep">/</span> 001</div>
+      <div class="model-pill" id="model-pill"><span class="pill-light"></span><span id="model-pill-text">Checking model</span></div>
+    </header>
+
+    <main class="workspace">
+      <aside class="rail" aria-label="Observation selection">
+        <div class="rail-intro">
+          <div class="eyebrow"><span class="eyebrow-line"></span>FIELD STATION 04</div>
+          <h1>Read the wind <br>on <i>Mars.</i></h1>
+          <p>Dark fans on spring ice record the direction dust traveled after CO₂ jets broke through the surface.</p>
+        </div>
+        <div class="section-head">
+          <span>OBSERVATIONS</span>
+          <span id="observation-total">03</span>
+        </div>
+        <div id="scene-list" class="scene-list"></div>
+        <div class="rail-bottom">
+          <span class="tiny-square" aria-hidden="true"></span>
+          <span>FROM ORBIT TO EVIDENCE</span>
+          <span class="rail-bottom-line"></span>
+        </div>
+      </aside>
+
+      <section class="viewer-column" aria-label="Mars image and analysis">
+        <div class="viewer-topline">
+          <div>
+            <div class="eyebrow">HIRISE <span class="topbar-sep">/</span> MARS RECONNAISSANCE ORBITER</div>
+            <h2 id="scene-title">Loading observation…</h2>
+          </div>
+          <div class="image-id" id="scene-id">—</div>
+        </div>
+        <div class="viewer">
+          <div class="image-frame" id="image-frame">
+            <img id="scene-image" alt="High-resolution orbital image of springtime terrain on Mars" width="1024" height="1024">
+            <svg id="overlay" class="overlay" viewBox="0 0 1024 1024" preserveAspectRatio="xMidYMid meet" aria-label="Fan annotations and inferred wind vectors"></svg>
+            <div class="scanline" aria-hidden="true"></div>
+            <div class="corner corner-tl" aria-hidden="true"></div>
+            <div class="corner corner-tr" aria-hidden="true"></div>
+            <div class="corner corner-bl" aria-hidden="true"></div>
+            <div class="corner corner-br" aria-hidden="true"></div>
+            <div class="viewer-coordinate" id="viewer-coordinate">—</div>
+            <div class="north-indicator" title="True north on this map projection"><span id="north-arrow" aria-hidden="true">↑</span><span>N</span></div>
+            <div class="selection-callout" id="selection-callout" hidden>
+              <span id="selection-callout-label">EVIDENCE</span>
+              <strong id="selection-callout-main">—</strong>
+              <small id="selection-callout-detail">—</small>
+            </div>
+            <div class="viewer-scale">HI<span class="scale-line"></span>RISE <span class="scale-meter">1 M / PX</span></div>
+            <div class="frame-status" id="frame-status">RAW IMAGE</div>
+          </div>
+        </div>
+        <div class="playback">
+          <div class="stage-control" role="group" aria-label="Analysis stage">
+            <button class="stage active" data-stage="raw" type="button"><span class="stage-num">01</span><span>Raw image</span></button>
+            <span class="stage-connector" aria-hidden="true"></span>
+            <button class="stage" data-stage="fans" type="button"><span class="stage-num">02</span><span>Find fans</span></button>
+            <span class="stage-connector" aria-hidden="true"></span>
+            <button class="stage" data-stage="wind" type="button"><span class="stage-num">03</span><span>Wind field</span></button>
+          </div>
+          <button type="button" class="replay-button" id="replay-button" title="Replay the reveal" aria-label="Replay the reveal"><span aria-hidden="true">↻</span> Replay</button>
+        </div>
+        <div class="viewer-caption">
+          <span id="caption-primary">Orbital image · no analysis overlay</span>
+          <span id="caption-source">IMAGE: NASA / JPL-CALTECH / UARIZONA</span>
+        </div>
+      </section>
+
+      <aside class="analysis" aria-label="Analysis details">
+        <div class="analysis-header">
+          <div class="eyebrow"><span class="status-glyph"></span>ANALYSIS</div>
+          <span class="report-number">REPORT 001 / 003</span>
+        </div>
+        <div class="analysis-main">
+          <div class="analysis-kicker">SEASONAL CO₂ DEPOSITS</div>
+          <h2 id="finding-title">The surface holds<br>a record of <i>wind.</i></h2>
+          <p id="finding-description">Reveal the fan markings to see how a pattern of dark deposits becomes a directional field.</p>
+        </div>
+        <div class="source-switch" role="group" aria-label="Evidence source">
+          <button type="button" class="source-tab active" id="reference-tab">Planet Four reference</button>
+          <button type="button" class="source-tab" id="model-tab">Roboflow model</button>
+        </div>
+        <div class="analysis-footer">
+          <button type="button" id="run-model" class="model-action">Run Roboflow on this image <span aria-hidden="true">↗</span></button>
+          <span id="model-action-note">Connect a trained model to enable live inference.</span>
+        </div>
+        <div class="threshold-control" id="threshold-control" hidden>
+          <label for="threshold"><span>MIN MODEL CONFIDENCE</span><strong id="threshold-value">35%</strong></label>
+          <input id="threshold" type="range" min="20" max="90" step="5" value="35">
+        </div>
+        <div class="model-message" id="model-message" hidden></div>
+        <div class="metric-grid">
+          <div class="metric-card"><span class="metric-label" id="count-label">REFERENCE FANS</span><strong id="fan-count">—</strong><span class="metric-foot" id="count-foot">Citizen-science marks</span></div>
+          <div class="metric-card"><span class="metric-label" id="bearing-label">DOMINANT BEARING</span><strong id="dominant-bearing">—</strong><span class="metric-foot" id="bearing-foot">Catalog orientation</span></div>
+        </div>
+        <div class="rose-section">
+          <div class="subhead"><span>DIRECTION DISTRIBUTION</span><span id="rose-note">REFERENCE</span></div>
+          <svg id="direction-rose" viewBox="0 0 340 180" role="img" aria-label="Distribution of inferred fan directions"></svg>
+        </div>
+        <div class="inspection" id="inspection">
+          <div class="subhead"><span>SELECTED EVIDENCE</span><span id="selection-number">—</span></div>
+          <p id="inspection-prompt">Select a fan on the image to inspect its source and direction.</p>
+          <div class="inspection-grid" id="inspection-grid" hidden>
+            <div><span>BEARING</span><strong id="inspection-bearing">—</strong></div>
+            <div><span id="inspection-score-label">CITIZEN VOTES</span><strong id="inspection-score">—</strong></div>
+          </div>
+          <div class="inspection-source" id="inspection-source"></div>
+        </div>
+      </aside>
+    </main>
+    <footer class="footer">
+      <span>IMAGE DATA <a id="hirise-link" href="https://hirise.lpl.arizona.edu/" target="_blank" rel="noopener">HIRISE ↗</a> <span class="footer-divider">·</span> FAN REFERENCES <a href="https://zenodo.org/records/20054589" target="_blank" rel="noopener">PLANET FOUR V3.1 ↗</a></span>
+      <span>DIRECTIONS INFERRED FROM SURFACE DEPOSITS — NOT A LIVE WEATHER FORECAST</span>
+    </footer>
+  </div>
+</body>
+</html>
