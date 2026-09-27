@@ -17,7 +17,9 @@ const SAMPLE = {
 const state = {
   canvas:null, imageURL:null, file:null, meta:null, hash:null, predictions:[],
   selected:null, threshold:.35, modelId:null, modelReady:false, accessRequired:false, accessGranted:true, dailyRemaining:null,
-  scanning:false, scanToken:0, controller:null, thumbnailCache:new Map(), hasRevealed:false
+  scanning:false, scanToken:0, controller:null, thumbnailCache:new Map(), hasRevealed:false,
+  reviewSession:null, reviewAgentReady:false, reviewFixture:null, rawResponses:[], reviewClock:new Map(), reviewClockStart:null,
+  reviewPoll:null, evidenceURL:[], shownEvidence:null
 };
 const $ = id => document.getElementById(id);
 const number = value => Number(value).toLocaleString();
@@ -49,11 +51,14 @@ async function modelStatus() {
     state.dailyRemaining = result.daily_remaining;
     state.modelReady = !!result.scout_ready && state.accessGranted && result.daily_remaining !== 0;
     state.modelId = result.model_id;
+    state.reviewAgentReady = !!result.review_agent?.enabled;
+    $("agent-availability").textContent=state.reviewAgentReady ? "AVAILABLE" : "OFFLINE";
     $("access-card").hidden = !state.accessRequired || state.accessGranted;
     $("status-text").textContent = !state.accessGranted ? "ACCESS CODE REQUIRED" : result.daily_remaining === 0 ? "SCAN LIMIT REACHED" : result.scout_ready ? "MODEL CONNECTED" : (result.mode === "recorded" ? "LIVE MODEL REQUIRED" : "MODEL UNAVAILABLE");
     $("model-status").classList.toggle("ready", state.modelReady);
   } catch (_) {
     state.modelReady = false;
+    state.reviewAgentReady = false;
     $("status-text").textContent = "MODEL UNAVAILABLE";
   }
   updateScanButton();
@@ -75,9 +80,9 @@ async function loadEvaluation() {
 
 function updateScanButton() {
   const button = $("scan-button");
-  button.disabled = !state.canvas || !state.modelReady || state.scanning;
+  button.disabled = !state.canvas || !state.modelReady || state.scanning || !!state.reviewSession || !!state.reviewFixture;
   button.classList.toggle("busy", state.scanning);
-  button.innerHTML = (state.scanning ? "Scanning Mars…" : !state.canvas ? "Load an image first" : !state.accessGranted ? "Enter access code" : state.dailyRemaining === 0 ? "Daily limit reached" : !state.modelReady ? "Connect Roboflow" : state.predictions.length ? "Scan again" : "Scan with Roboflow") + ' <span aria-hidden="true">↗</span>';
+  button.innerHTML = (state.scanning ? "Scanning Mars…" : state.reviewSession ? "Review session frozen" : state.reviewFixture ? "Fixed detector output" : !state.canvas ? "Load an image first" : !state.accessGranted ? "Enter access code" : state.dailyRemaining === 0 ? "Daily limit reached" : !state.modelReady ? "Connect Roboflow" : state.predictions.length ? "Scan again" : "Scan with Roboflow") + ' <span aria-hidden="true">↗</span>';
 }
 
 function imageDigest(file, scale) {
@@ -131,6 +136,14 @@ async function loadFile(file, meta={}) {
     } catch (_) {}
   }
   state.predictions = [];
+  state.rawResponses=[];
+  state.reviewSession=null;
+  state.reviewFixture=null;
+  clearInterval(state.reviewPoll);
+  state.reviewPoll=null;
+  stopReviewClock();
+  state.reviewClock.clear();
+  clearAgentEvidence();
   state.selected = null;
   state.hasRevealed = false;
   state.thumbnailCache.clear();
@@ -138,18 +151,18 @@ async function loadFile(file, meta={}) {
   $("image-wrap").hidden = false;
   $("empty-state").hidden = true;
   $("field-image").src = state.imageURL;
-  $("field-image").alt = (meta.sample ? "NASA HiRISE crop from " + meta.observation : "Uploaded image " + file.name) + " awaiting model review";
+  $("field-image").alt = (meta.sample || meta.fixture ? "NASA HiRISE crop from " + meta.observation : "Uploaded image " + file.name) + " awaiting model review";
   $("image-wrap").style.setProperty("--image-ratio", width + "/" + height);
   $("mask-overlay").setAttribute("viewBox", "0 0 " + width + " " + height);
   $("direction-overlay").setAttribute("viewBox", "0 0 " + width + " " + height);
   $("tile-overlay").setAttribute("viewBox", "0 0 " + width + " " + height);
   $("image-title").textContent = state.meta.title;
   $("image-id").textContent = state.meta.observation || "USER IMAGE";
-  $("image-eyebrow").innerHTML = (meta.sample ? "HIRISE <span class='slash'>/</span> NEWER OBSERVATION" : "USER IMAGE <span class='slash'>/</span> SOURCE UNVERIFIED");
+  $("image-eyebrow").innerHTML = meta.fixture ? "HIRISE <span class='slash'>/</span> FIXED REVIEW CROP" : (meta.sample ? "HIRISE <span class='slash'>/</span> NEWER OBSERVATION" : "USER IMAGE <span class='slash'>/</span> SOURCE UNVERIFIED");
   $("image-resolution").textContent = width + " × " + height + " PX";
   $("image-scale").textContent = state.meta.pixel_scale_m ? "EFFECTIVE 1 M / PX" : "SCALE UNKNOWN";
-  $("caption-right").textContent = meta.sample ? "IMAGE: NASA / JPL-CALTECH / UARIZONA" : "IMAGE: USER PROVIDED · SOURCE NOT VERIFIED";
-  $("caption-left").textContent = meta.sample ? "2024 HiRISE crop · no Planet Four lookup" : "Predictions are valid only for comparable Mars polar imagery";
+  $("caption-right").textContent = meta.sample || meta.fixture ? "IMAGE: NASA / JPL-CALTECH / UARIZONA" : "IMAGE: USER PROVIDED · SOURCE NOT VERIFIED";
+  $("caption-left").textContent = meta.fixture ? "Frozen detector response · reused evaluation crop" : meta.sample ? "2024 HiRISE crop · no Planet Four lookup" : "Predictions are valid only for comparable Mars polar imagery";
   $("north-angle").disabled=!!meta.sample;
   $("north-angle").value=state.meta.north_angle_deg ?? "";
   $("north-hint").textContent=meta.sample ? "North is derived from the HiRISE map projection at this crop's center (about 99.6° clockwise from image top)." : "For uploaded crops, supply north orientation to show compass bearings. Otherwise arrows stay image-relative.";
@@ -160,6 +173,7 @@ async function loadFile(file, meta={}) {
   setStep("source");
   render();
   updateScanButton();
+  renderAgentControls();
 }
 
 async function loadSample() {
@@ -261,6 +275,9 @@ async function runScan() {
   state.controller=controller;
   state.scanning=true;
   state.predictions=[];
+  state.rawResponses=[];
+  state.reviewSession=null;
+  state.reviewFixture=null;
   state.selected=null;
   state.hasRevealed=false;
   state.thumbnailCache.clear();
@@ -294,7 +311,7 @@ async function runScan() {
         const data=await response.json();
         if (response.status===401 || response.status===429) accessFailure=data.error || "Scan access unavailable";
         if (!response.ok) throw new Error(data.error||"Inference failed");
-        if (token===state.scanToken) collected.push(...normalizePredictions(data,tile));
+        if (token===state.scanToken) { collected.push(...normalizePredictions(data,tile)); state.rawResponses.push({tile,response:data}); }
       } catch (error) {
         if (error.name!=="AbortError" && token===state.scanToken) failures++;
       }
@@ -331,7 +348,7 @@ async function runScan() {
   if (accessFailure) modelStatus();
 }
 
-function visiblePredictions() { return state.predictions.filter(item=>item.confidence>=state.threshold); }
+function visiblePredictions() { return state.reviewSession ? state.predictions : state.predictions.filter(item=>item.confidence>=state.threshold); }
 function maskPath(points) { return points.map((point,index)=>(index?"L":"M")+point[0].toFixed(1)+" "+point[1].toFixed(1)).join(" ")+" Z"; }
 function svgNode(name, attributes={}, content=null) {
   const node=document.createElementNS(NS,name);
@@ -355,7 +372,9 @@ function thumbnail(candidate) {
 }
 
 function selectCandidate(candidate) {
+  stopReviewClock();
   state.selected=candidate;
+  startReviewClock();
   render();
   const panel=$("evidence-panel");
   if (window.innerWidth<760) panel.scrollIntoView({behavior:"smooth",block:"nearest"});
@@ -400,7 +419,9 @@ function renderQueue(list) {
     const direction=reviewedDirection(candidate);
     info.textContent=Math.round(candidate.confidence*100)+"% CONF. · "+number(Math.round(candidate.area_px2))+" PX²"+(direction?" · "+(direction.towardDegrees===null?Math.round(direction.imageDegrees)+"° IMAGE":Math.round(direction.towardDegrees)+"° DOWNWIND"):"");
     meta.append(title,info);
-    const decision=document.createElement("span");decision.className="candidate-state "+candidate.decision;decision.textContent=candidate.decision.toUpperCase();
+    const decision=document.createElement("span");decision.className="candidate-state "+candidate.decision;
+    const saved=state.reviewSession?.reviews.some(item=>item.candidate_id===candidate.agent_id&&item.stage===$("agent-stage").value);
+    decision.textContent=candidate.decision!=="pending"?candidate.decision.toUpperCase():saved?"SAVED":"PENDING";
     button.append(image,meta,decision);
     button.addEventListener("click",()=>selectCandidate(candidate));
     container.appendChild(button);
@@ -510,13 +531,17 @@ function renderEvidence() {
   $("direction-instruction").textContent=!candidate.axis?.usable ? "This mask is too round or small for a defensible long-axis estimate. Review it as a deposit only." : candidate.decision!=="accepted" ? "Accept this fan first. Then use A or B in the source crop to identify its narrow source end." : "Which end is the source? Choose A or B. The arrow points where dust traveled when this deposit formed.";
   const direction=reviewedDirection(candidate);
   $("direction-result").textContent=!direction ? "No direction assigned" : direction.towardDegrees===null ? "Estimated dust travel: "+Math.round(direction.imageDegrees)+"° clockwise from image top · compass north unknown" : "Estimated dust travel toward "+Math.round(direction.towardDegrees)+"° "+compassPoint(direction.towardDegrees)+" · wind from "+Math.round(direction.fromDegrees)+"° "+compassPoint(direction.fromDegrees);
+  renderManualWider(candidate);
+  renderAgentSelected(candidate);
 }
 
 function render() {
   const list=visiblePredictions();
   if (state.selected && !list.includes(state.selected)) state.selected=null;
   $("candidate-count").textContent=state.predictions.length?number(list.length):(state.canvas?"0":"—");
-  $("reviewed-count").textContent=state.predictions.length?number(list.filter(item=>item.decision!=="pending").length):(state.canvas?"0":"—");
+  $("reviewed-count").textContent=state.predictions.length?number(state.reviewSession?
+    new Set(state.reviewSession.reviews.filter(item=>item.stage===$("agent-stage").value).map(item=>item.candidate_id)).size:
+    list.filter(item=>item.decision!=="pending").length):(state.canvas?"0":"—");
   const area=list.reduce((sum,item)=>sum+item.area_px2,0);
   $("area-label").textContent=state.meta?.pixel_scale_m?"EST. AREA · M²":"EST. AREA · PX²";
   $("area-count").textContent=state.predictions.length?(area>=1000?(area/1000).toFixed(1)+"k":number(Math.round(area))):(state.canvas?"0":"—");
@@ -531,11 +556,28 @@ function render() {
   renderEvidence();
   renderDirections(list);
   renderWindSummary(list);
+  renderAgentControls();
   if (state.predictions.length) state.hasRevealed=true;
 }
 
-function review(decision) {
+async function review(decision) {
   if (!state.selected) return;
+  if (state.reviewSession) {
+    const candidate=state.selected;
+    const reviewer=$("agent-reviewer").value.trim();
+    const stage=$("agent-stage").value;
+    stopReviewClock();
+    const duration_ms=Math.round(state.reviewClock.get(candidate.agent_id)||0);
+    try {
+      const response=await fetch(`/api/scout/review-sessions/${state.reviewSession.id}/reviews`,{
+        method:"POST",headers:{"content-type":"application/json",...accessHeaders()},
+        body:JSON.stringify({candidate_id:candidate.agent_id,reviewer,stage,decision,duration_ms})
+      });
+      const data=await response.json();
+      if (!response.ok) throw new Error(data.error||"Review was not saved");
+      await refreshReviewSession();
+    } catch(error) { toast(error.message); startReviewClock(); return; }
+  }
   state.selected.decision=decision;
   if (decision!=="accepted") state.selected.source_end=null;
   saveDecisions();
@@ -552,17 +594,229 @@ function selectOrigin(end) {
 
 function buildRecord() {
   return {
-    format:"mars-fan-scout-review-v2",
+    format:state.reviewSession?"mars-fan-scout-review-v3":"mars-fan-scout-review-v2",
     exported_at:new Date().toISOString(),
     warning:"Model candidates and derived directions are not confirmed scientific measurements. Direction requires a reviewer-selected source end; wind speed and current weather are not inferred. Pixel coordinates are not georeferenced.",
     image:{name:state.file.name,sha256:state.hash.split(":")[0],width:state.canvas.width,height:state.canvas.height,source:state.meta.source||null,observation:state.meta.observation||null,captured:state.meta.captured||null,crop_raw_pixels:state.meta.crop_raw_pixels||null,source_scale_m_per_pixel:state.meta.source_scale_m_per_pixel||null,working_scale_m_per_pixel:state.meta.pixel_scale_m,north_clockwise_from_image_top_deg:state.meta.north_angle_deg,north_reference:state.meta.north_reference||null},
     model:{provider:"Roboflow",id:state.modelId,confidence_floor:.2,display_threshold:state.threshold,direction_method:"Area-weighted mask major axis with a human-selected source end; minimum 1.5 elongation and 20-pixel span"},
     summary:{model_candidates_above_floor:state.predictions.length,displayed_at_threshold:visiblePredictions().length,accepted:state.predictions.filter(item=>item.decision==="accepted").length,rejected:state.predictions.filter(item=>item.decision==="rejected").length,unsure:state.predictions.filter(item=>item.decision==="unsure").length,accepted_with_direction:state.predictions.filter(item=>reviewedDirection(item)).length},
+    agent_review:state.reviewSession?{session_id:state.reviewSession.id,snapshot_sha256:state.reviewSession.snapshot_sha256,runs:state.reviewSession.runs,server_reviews:state.reviewSession.reviews,complete:state.reviewSession.complete,evidence_note:"Download the complete evidence bundle after every timed review."}:null,
     candidates:state.predictions.map(item=>{
       const direction=reviewedDirection(item);
       return {id:item.id,confidence:item.confidence,shown_at_export:item.confidence>=state.threshold,decision:item.decision,center_px:item.center.map(value=>Math.round(value*10)/10),area_px2:Math.round(item.area_px2),estimated_area_m2:state.meta.pixel_scale_m?Math.round(item.area_px2*state.meta.pixel_scale_m**2):null,polygon_px:item.polygon.map(point=>point.map(value=>Math.round(value*10)/10)),axis_elongation:item.axis?Math.round(item.axis.elongation*100)/100:null,source_end_selected_by_reviewer:item.source_end,direction:direction?{source_px:direction.source.map(value=>Math.round(value*10)/10),tip_px:direction.tip.map(value=>Math.round(value*10)/10),clockwise_from_image_top_deg:Math.round(direction.imageDegrees*10)/10,dust_toward_bearing_deg:direction.towardDegrees===null?null:Math.round(direction.towardDegrees*10)/10,wind_from_bearing_deg:direction.fromDegrees===null?null:Math.round(direction.fromDegrees*10)/10}:null};
     })
   };
+}
+
+function stopReviewClock() {
+  const active=state.reviewClockStart;
+  if (!active) return;
+  state.reviewClock.set(active.id,(state.reviewClock.get(active.id)||0)+performance.now()-active.at);
+  state.reviewClockStart=null;
+}
+function startReviewClock() {
+  if (!state.reviewSession || !state.selected?.agent_id || document.hidden || state.reviewClockStart) return;
+  state.reviewClockStart={id:state.selected.agent_id,at:performance.now()};
+}
+function clearAgentEvidence() {
+  state.evidenceURL.forEach(URL.revokeObjectURL);
+  state.evidenceURL=[];
+  state.shownEvidence=null;
+  $("agent-requested-evidence").hidden=true;
+  $("agent-wider-source").removeAttribute("src");
+  $("agent-wider-mask").removeAttribute("src");
+}
+function renderManualWider(candidate) {
+  const canvas=$("manual-wider-crop"), context=canvas.getContext("2d");
+  const span=Math.max(105,candidate.bounds.right-candidate.bounds.left,candidate.bounds.bottom-candidate.bounds.top)*3.3;
+  context.clearRect(0,0,canvas.width,canvas.height);
+  context.drawImage(state.canvas,candidate.center[0]-span/2,candidate.center[1]-span/2,span,span,0,0,canvas.width,canvas.height);
+}
+function agentResult(candidate) {
+  if (!state.reviewSession || !candidate?.agent_id) return null;
+  const run=Object.values(state.reviewSession.runs).find(item=>item.candidates.includes(candidate.agent_id));
+  return run?.results?.[candidate.agent_id] || null;
+}
+async function showAgentEvidence(sessionId,evidenceId) {
+  if (state.shownEvidence===evidenceId) return;
+  clearAgentEvidence();
+  const urls=[];
+  try {
+    for (const kind of ["source","mask"]) {
+      const response=await fetch(`/api/scout/review-sessions/${sessionId}/evidence/${evidenceId}/${kind}`,{headers:accessHeaders()});
+      if (!response.ok) throw new Error("Evidence is unavailable");
+      urls.push(URL.createObjectURL(await response.blob()));
+    }
+    if (state.reviewSession?.id!==sessionId || !state.selected || !agentResult(state.selected)?.trace?.some(item=>item.evidence_id===evidenceId)) {
+      urls.forEach(URL.revokeObjectURL);return;
+    }
+    state.evidenceURL=urls;
+    state.shownEvidence=evidenceId;
+    $("agent-wider-source").src=urls[0];
+    $("agent-wider-mask").src=urls[1];
+    $("agent-requested-evidence").hidden=false;
+  } catch (_) { urls.forEach(URL.revokeObjectURL); }
+}
+function renderAgentSelected(candidate) {
+  const panel=$("agent-selected");
+  panel.hidden=!state.reviewSession;
+  if (!state.reviewSession) { clearAgentEvidence(); return; }
+  const result=agentResult(candidate);
+  const stage=$("agent-stage").value;
+  const blind=stage!=="timed";
+  $("agent-timeline").replaceChildren();
+  if (blind) { $("agent-advice").textContent=stage==="reference"?"BLINDED REFERENCE REVIEW":"ADJUDICATION WITHOUT ADVICE";$("agent-explanation").textContent="Judge the source pixels without agent advice.";clearAgentEvidence();return; }
+  if (!result || result.hidden_until_review) {
+    $("agent-advice").textContent=result?.hidden_until_review?"HUMAN-ONLY ARM":"AGENT NOT RUN";
+    $("agent-explanation").textContent=result?.hidden_until_review?"Record your decision before advice is revealed.":"The agent has no advice for this candidate yet.";
+    clearAgentEvidence();return;
+  }
+  $("agent-advice").textContent=result.action==="propose_reject"?"AGENT PROPOSES REJECT · HUMAN REVIEW REQUIRED":"AGENT DEFERS TO HUMAN";
+  $("agent-explanation").textContent=(result.explanation||"No explanation available.")+(Number.isFinite(result.elapsed_ms)?` · Agent ${result.elapsed_ms} ms`:"");
+  for (const event of result.trace||[]) {
+    const line=document.createElement("p");
+    const cost=event.cost_usd===null?" · cost unknown":Number.isFinite(event.cost_usd)?" · $"+event.cost_usd.toFixed(5):"";
+    line.textContent=(event.type||"event").replaceAll("_"," ")+(Number.isFinite(event.latency_ms)?" · "+event.latency_ms+" ms":"")+cost;
+    $("agent-timeline").appendChild(line);
+  }
+  const wider=result.trace?.find(item=>item.type==="wider_view_created");
+  if (wider) showAgentEvidence(state.reviewSession.id,wider.evidence_id);
+  else clearAgentEvidence();
+}
+function renderAgentControls() {
+  const session=state.reviewSession;
+  $("agent-session-controls").hidden=!session;
+  $("agent-session-button").disabled=!state.predictions.length||!$("agent-consent").checked||!!session;
+  $("confidence-slider").disabled=!!session;
+  $("fixture-load-button").disabled=!$("fixture-select").value;
+  $("agent-export-button").disabled=!session?.complete;
+  const selected=state.selected;
+  const existing=selected?agentResult(selected):null;
+  $("agent-run-button").disabled=!session||!!session.fixture_id||!state.reviewAgentReady||!selected||!!existing;
+  $("agent-run-all-button").disabled=!session||!state.reviewAgentReady||state.predictions.length>50||
+    (session.fixture_id?Object.keys(session.runs).length>0:state.predictions.every(item=>!!agentResult(item)));
+  if (session) {
+    const stage=$("agent-stage").value;
+    $("agent-status").textContent=`Session ${session.id} · ${session.reviews.filter(item=>item.stage===stage).length}/${session.candidates.length} ${stage} reviews saved`;
+  }
+  else if (state.predictions.length) $("agent-status").textContent="Start a session to retain evidence and run the bounded review agent.";
+}
+async function apiJSON(path,options={}) {
+  const response=await fetch(path,{...options,headers:{...(options.headers||{}),...accessHeaders()}});
+  const data=await response.json();
+  if (!response.ok) throw new Error(data.error||`Request failed (${response.status})`);
+  return data;
+}
+async function refreshReviewSession() {
+  if (!state.reviewSession) return;
+  const id=state.reviewSession.id;
+  const latest=await apiJSON(`/api/scout/review-sessions/${id}`);
+  if (state.reviewSession?.id!==id) return;
+  state.reviewSession=latest;
+  renderAgentControls();
+  if (state.selected) renderAgentSelected(state.selected);
+}
+function predictionsFromSnapshot(items) {
+  return items.map((item,index)=>{
+    const polygon=item.polygon;
+    const bounds=boxOf(polygon);
+    return {id:item.label||`RF-${String(index+1).padStart(3,"0")}`,agent_id:item.id||null,arm:item.arm||"assisted",polygon,bounds,
+      center:[(bounds.left+bounds.right)/2,(bounds.top+bounds.bottom)/2],area_px2:polygonArea(polygon),confidence:item.confidence,
+      decision:"pending",source_end:null,axis:polygonAxis(polygon)};
+  });
+}
+async function loadFixture() {
+  const id=$("fixture-select").value;
+  if (!id) return;
+  const fixture=await apiJSON(`/api/scout/review-fixtures/${id}`);
+  const response=await fetch(`/api/scout/review-fixtures/${id}/image`,{headers:accessHeaders()});
+  if (!response.ok) throw new Error("Fixed crop image is unavailable");
+  $("source-scale").value="1";
+  await loadFile(new File([await response.blob()],`${id}.jpg`,{type:"image/jpeg"}),{title:`Fixed review ${id}`,observation:fixture.observation,source:"HiRISE locked evaluation crop",fixture:true});
+  state.reviewFixture=fixture;
+  state.rawResponses=fixture.detector_responses;
+  state.predictions=predictionsFromSnapshot(fixture.candidates);
+  state.modelId=fixture.detector_model;
+  state.threshold=.2;
+  $("confidence-slider").value="20";$("confidence-value").textContent="20%";
+  $("image-top-label").textContent="SAVED ROBOFLOW OUTPUT · FIXED CROP";
+  $("review-intro").textContent="This is frozen Roboflow output from a reused evaluation crop. Every candidate needs a human judgment.";
+  setStep("review");render();updateScanButton();
+}
+async function loadFixtures() {
+  try {
+    const data=await apiJSON("/api/scout/review-fixtures");
+    const select=$("fixture-select");
+    select.replaceChildren(new Option("Choose a saved crop",""));
+    data.crops.forEach(crop=>select.add(new Option(`${crop.id} · ${crop.candidates} candidates`,crop.id)));
+  } catch (_) {}
+}
+async function createReviewSession() {
+  if (!$("agent-consent").checked||!state.predictions.length) return;
+  $("agent-session-button").disabled=true;
+  try {
+    let body;
+    if (state.reviewFixture) body={fixture_id:state.reviewFixture.id};
+    else {
+      const blob=await new Promise((resolve,reject)=>state.canvas.toBlob(value=>value?resolve(value):reject(new Error("Could not encode image")),"image/png"));
+      const url=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(new Error("Could not read working image"));reader.readAsDataURL(blob)});
+      body={image_base64:String(url).split(",")[1],original_sha256:state.hash.split(":")[0],name:state.file.name,observation:state.meta.observation,
+        detector_model:state.modelId,detector_responses:state.rawResponses,
+        candidates:state.predictions.map(item=>({label:item.id,polygon:item.polygon,confidence:item.confidence,arm:"assisted"}))};
+    }
+    const session=await apiJSON("/api/scout/review-sessions",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(body)});
+    state.reviewSession=session;
+    session.candidates.forEach((item,index)=>{state.predictions[index].agent_id=item.id;state.predictions[index].arm=item.arm});
+    $("agent-resume-id").value=session.id;
+    try { localStorage.setItem("mars-fan-scout-last-review-session",session.id); } catch (_) {}
+    toast("Review session saved. Every candidate still needs your decision.");
+    render();updateScanButton();startReviewClock();
+  } catch(error) { toast(error.message);renderAgentControls(); }
+}
+async function resumeReviewSession() {
+  const id=$("agent-resume-id").value.trim();
+  if (!/^[a-f0-9-]{36}$/.test(id)) throw new Error("Enter a valid session ID");
+  const session=await apiJSON(`/api/scout/review-sessions/${id}`);
+  const response=await fetch(`/api/scout/review-sessions/${id}/image`,{headers:accessHeaders()});
+  if (!response.ok) throw new Error("Session image is unavailable");
+  $("source-scale").value="1";
+  const type=session.image.format==="png"?"image/png":"image/jpeg";
+  await loadFile(new File([await response.blob()],session.image.name||"review-image",{type}),{title:session.image.name||"Resumed review",observation:session.image.observation,fixture:!!session.fixture_id});
+  state.reviewSession=session;
+  state.reviewFixture=session.fixture_id?{id:session.fixture_id}:null;
+  state.predictions=predictionsFromSnapshot(session.candidates);
+  state.modelId=session.detector_model;
+  state.threshold=.2;$("confidence-slider").value="20";$("confidence-value").textContent="20%";
+  $("image-top-label").textContent="FROZEN REVIEW SESSION";
+  $("review-intro").textContent="Review each saved candidate against the source pixels. Agent advice remains advisory.";
+  setStep("review");render();updateScanButton();
+}
+async function runAgent(ids) {
+  const session=state.reviewSession;
+  if (!session) return;
+  try {
+    await apiJSON(`/api/scout/review-sessions/${session.id}/runs`,{method:"POST",headers:{"content-type":"application/json"},
+      body:JSON.stringify({candidate_ids:ids,idempotency_key:crypto.randomUUID()})});
+    await refreshReviewSession();
+    clearInterval(state.reviewPoll);
+    state.reviewPoll=setInterval(async()=>{
+      try {
+        await refreshReviewSession();
+        if (state.reviewSession?.id!==session.id||!Object.values(state.reviewSession.runs).some(run=>["queued","running"].includes(run.status))) {
+          clearInterval(state.reviewPoll);state.reviewPoll=null;
+        }
+      } catch (_) { clearInterval(state.reviewPoll);state.reviewPoll=null;toast("Agent status unavailable; resume the session to check its record."); }
+    },1500);
+  } catch(error) { toast(error.message); }
+}
+async function downloadAgentBundle() {
+  const session=state.reviewSession;
+  if (!session?.complete) return;
+  const response=await fetch(`/api/scout/review-sessions/${session.id}/bundle`,{headers:accessHeaders()});
+  if (!response.ok) { const data=await response.json();throw new Error(data.error||"Bundle unavailable"); }
+  const url=URL.createObjectURL(await response.blob());
+  const link=document.createElement("a");link.href=url;link.download=`mars-fan-review-${session.id}.zip`;link.click();
+  setTimeout(()=>URL.revokeObjectURL(url),30000);
 }
 
 function exportRecord() {
@@ -636,6 +890,7 @@ function init() {
     await modelStatus();
     $("access-message").textContent=state.accessGranted ? "Access granted for this browser session." : "That code did not unlock scanning.";
     if (state.accessGranted) toast("Live scans unlocked.");
+    if (state.accessGranted) loadFixtures();
   });
   $("confidence-slider").addEventListener("input",event=>{state.threshold=Number(event.target.value)/100;$("confidence-value").textContent=event.target.value+"%";render()});
   $("accept-button").addEventListener("click",()=>review("accepted"));
@@ -644,12 +899,31 @@ function init() {
   $("origin-a-button").addEventListener("click",()=>selectOrigin("a"));
   $("origin-b-button").addEventListener("click",()=>selectOrigin("b"));
   $("origin-clear-button").addEventListener("click",()=>selectOrigin(null));
+  $("fixture-select").addEventListener("change",renderAgentControls);
+  $("fixture-load-button").addEventListener("click",()=>loadFixture().catch(error=>toast(error.message)));
+  $("agent-consent").addEventListener("change",renderAgentControls);
+  $("agent-session-button").addEventListener("click",createReviewSession);
+  $("agent-resume-button").addEventListener("click",()=>resumeReviewSession().catch(error=>toast(error.message)));
+  $("agent-run-button").addEventListener("click",()=>state.selected?.agent_id&&runAgent([state.selected.agent_id]));
+  $("agent-run-all-button").addEventListener("click",()=>{
+    if (!state.reviewSession) return;
+    const pending=state.predictions.filter(item=>!agentResult(item)).map(item=>item.agent_id);
+    if (pending.length) runAgent(pending);
+  });
+  $("agent-export-button").addEventListener("click",()=>downloadAgentBundle().catch(error=>toast(error.message)));
+  $("agent-stage").addEventListener("change",()=>{
+    stopReviewClock();state.reviewClock.clear();
+    state.predictions.forEach(item=>{item.decision="pending";item.source_end=null});
+    saveDecisions();startReviewClock();render();
+  });
+  document.addEventListener("visibilitychange",()=>document.hidden?stopReviewClock():startReviewClock());
   $("export-button").addEventListener("click",exportRecord);
   $("copy-button").addEventListener("click",()=>{
     if ($("review-json-panel").hidden) showReviewJSON();
     else $("review-json-panel").hidden=true;
   });
   $("copy-json-button").addEventListener("click",copyReviewJSON);
-  modelStatus().then(()=>{loadEvaluation();loadSample()});
+  try { $("agent-resume-id").value=localStorage.getItem("mars-fan-scout-last-review-session")||""; } catch (_) {}
+  modelStatus().then(()=>{loadEvaluation();loadSample();if(state.accessGranted)loadFixtures()});
 }
 document.addEventListener("DOMContentLoaded",init);

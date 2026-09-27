@@ -4,6 +4,11 @@ import { existsSync, readFileSync } from "node:fs";
 import { resolve, extname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createDemoAccess } from "./demo-access.mjs";
+import { zipSync, strToU8 } from "fflate";
+import { ReviewStore } from "./review-agent/store.mjs";
+import { ReviewBudget } from "./review-agent/budget.mjs";
+import { ReviewRunner } from "./review-agent/runner.mjs";
+import { makeOpenAIProvider, MODEL as reviewModel } from "./review-agent/provider.mjs";
 
 const root = resolve(fileURLToPath(new URL(".", import.meta.url)));
 const publicDir = resolve(root, "public");
@@ -36,6 +41,17 @@ const recordedDir = resolve(root, "recorded");
 const evaluationFile = resolve(root, "evaluation/locked/score.json");
 const recordingsComplete = sceneData.every(scene => existsSync(resolve(recordedDir, scene.id + ".json")));
 const ready = replay ? recordingsComplete : configured && !training;
+const reviewStore = new ReviewStore(resolve(root, process.env.REVIEW_AGENT_DATA_DIR || ".review-agent"));
+await reviewStore.init();
+const reviewBudget = new ReviewBudget(resolve(root, ".review-agent-budget.json"), {
+  dailyCallLimit: process.env.REVIEW_AGENT_DAILY_CALL_LIMIT,
+  dailyUsdLimit: process.env.REVIEW_AGENT_DAILY_USD_LIMIT,
+  perRunUsdLimit: process.env.REVIEW_AGENT_PER_CANDIDATE_USD_LIMIT,
+});
+const reviewProvider = process.env.REVIEW_AGENT_ENABLED === "1" && process.env.OPENAI_API_KEY
+  ? makeOpenAIProvider({ key: process.env.OPENAI_API_KEY }) : null;
+const reviewRunner = new ReviewRunner({ store: reviewStore, budget: reviewBudget, provider: reviewProvider });
+const reviewFixtures = JSON.parse(readFileSync(resolve(root, "evaluation/agent-review/manifest.json"), "utf8"));
 
 function send(response, status, data, type = "application/json; charset=utf-8") {
   response.writeHead(status, { "content-type":type, "cache-control":"no-store", "x-content-type-options":"nosniff" });
@@ -49,6 +65,32 @@ async function readBody(request, max = 4096) {
     if (body.length > max) throw new Error("Request too large");
   }
   return JSON.parse(body);
+}
+
+async function readLargeJson(request, max = 70 * 1024 * 1024) {
+  const chunks = []; let size = 0;
+  for await (const chunk of request) {
+    size += chunk.length;
+    if (size > max) throw new Error("Request too large");
+    chunks.push(chunk);
+  }
+  return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+}
+
+function publicReviewSession(session) {
+  const complete = session.candidates.every(candidate => Object.values(session.reviews).some(review => review.candidate_id === candidate.id && review.stage === "timed"));
+  return { format: session.format, id: session.id, created_at: session.created_at, image: session.image, fixture_id: session.fixture_id,
+    snapshot_sha256: session.snapshot_sha256, detector_model: session.detector_model, detector_responses_sha256: session.detector_responses_sha256, candidates: session.candidates,
+    runs: Object.fromEntries(Object.entries(session.runs).map(([id, run]) => [id, reviewRunner.publicRun(session, run)])),
+    reviews: Object.values(session.reviews).map(review => complete || review.stage === "timed" ? review :
+      { candidate_id: review.candidate_id, stage: review.stage, reviewer: review.reviewer, at: review.at, decision: null }), complete };
+}
+
+function needsReviewAuth(request, response) {
+  if (!access.accessRequired || !access.authorized(request.headers["x-demo-access-code"])) {
+    send(response, 401, { error: "Meeting code is required for review sessions" }); return true;
+  }
+  return false;
 }
 
 async function readImage(request, max = 3 * 1024 * 1024) {
@@ -113,7 +155,8 @@ const server = createServer(async (request, response) => {
     const url = new URL(request.url, "http://localhost");
     if (request.method === "GET" && url.pathname === "/api/status") {
       const granted = access.authorized(request.headers["x-demo-access-code"]);
-      return send(response, 200, { ready, scout_ready:configured && !training && !replay, configured, training:training && !replay, mode:replay ? "recorded" : "live", model_id:modelIdValid ? modelId : null, access_required:access.accessRequired, access_granted:granted, daily_remaining:granted ? access.remaining() : null });
+      return send(response, 200, { ready, scout_ready:configured && !training && !replay, configured, training:training && !replay, mode:replay ? "recorded" : "live", model_id:modelIdValid ? modelId : null, access_required:access.accessRequired, access_granted:granted, daily_remaining:granted ? access.remaining() : null,
+        review_agent: granted ? { ...reviewBudget.status(), enabled: reviewRunner.enabled && reviewBudget.status().enabled, model: reviewModel } : { enabled: false } });
     }
     if (request.method === "GET" && url.pathname === "/api/scout/evaluation") {
       try {
@@ -126,6 +169,93 @@ const server = createServer(async (request, response) => {
           deposit_recall:result.deposit_recall, method:result.method,
         });
       } catch (_) { return send(response, 404, { error:"No independent review is available yet" }); }
+    }
+    if (url.pathname === "/api/scout/review-sessions" && request.method === "POST") {
+      if (needsReviewAuth(request, response)) return;
+      let body;
+      try { body = await readLargeJson(request); }
+      catch (error) { return send(response, 400, { error: error.message }); }
+      try {
+        if (body?.fixture_id) {
+          const fixture = reviewFixtures.crops.find(crop => crop.id === body.fixture_id);
+          if (!fixture) throw new Error("Unknown fixed crop");
+          body = { fixture_id: fixture.id, image_base64: (await readFile(resolve(root, fixture.image))).toString("base64"),
+            name: fixture.id + ".jpg", observation: fixture.observation, detector_model: reviewFixtures.model_id,
+            candidates: fixture.candidates, detector_responses: [JSON.parse(await readFile(resolve(root, fixture.detector_response), "utf8"))] };
+        }
+        return send(response, 201, publicReviewSession(await reviewStore.create(body)));
+      }
+      catch (error) { return send(response, 400, { error: error.message }); }
+    }
+    if (request.method === "GET" && url.pathname === "/api/scout/review-fixtures") {
+      if (needsReviewAuth(request, response)) return;
+      return send(response, 200, { format: reviewFixtures.format, model_id: reviewFixtures.model_id, selection: reviewFixtures.selection,
+        crops: reviewFixtures.crops.map(crop => ({ id: crop.id, observation: crop.observation, candidates: crop.candidates.length })) });
+    }
+    const fixtureMatch = url.pathname.match(/^\/api\/scout\/review-fixtures\/(locked-0[1-6])(?:\/(image))?$/);
+    if (request.method === "GET" && fixtureMatch) {
+      if (needsReviewAuth(request, response)) return;
+      const fixture = reviewFixtures.crops.find(crop => crop.id === fixtureMatch[1]);
+      if (!fixture) return send(response, 404, { error: "Unknown fixed crop" });
+      if (fixtureMatch[2] === "image") return send(response, 200, await readFile(resolve(root, fixture.image)), "image/jpeg");
+      return send(response, 200, { ...fixture, detector_model: reviewFixtures.model_id,
+        detector_responses: [JSON.parse(await readFile(resolve(root, fixture.detector_response), "utf8"))] });
+    }
+    const reviewMatch = url.pathname.match(/^\/api\/scout\/review-sessions\/([a-f0-9-]{36})(?:\/(.*))?$/);
+    if (reviewMatch) {
+      if (needsReviewAuth(request, response)) return;
+      const session = reviewStore.get(reviewMatch[1]);
+      if (!session) return send(response, 404, { error: "Unknown review session" });
+      const tail = reviewMatch[2] || "";
+      if (request.method === "GET" && !tail) return send(response, 200, publicReviewSession(session));
+      if (request.method === "GET" && tail === "image") return send(response, 200, await reviewStore.source(session), session.image.format === "png" ? "image/png" : "image/jpeg");
+      if (request.method === "POST" && tail === "runs") {
+        let body;
+        try { body = await readBody(request, 8192); }
+        catch (_) { return send(response, 400, { error: "Invalid run request" }); }
+        try { return send(response, 202, reviewRunner.publicRun(session, await reviewRunner.enqueue(session, body.candidate_ids, body.idempotency_key))); }
+        catch (error) { return send(response, reviewRunner.enabled ? 400 : 503, { error: error.message }); }
+      }
+      const runMatch = tail.match(/^runs\/([a-f0-9-]{36})$/);
+      if (request.method === "GET" && runMatch) {
+        const run = session.runs[runMatch[1]];
+        return run ? send(response, 200, reviewRunner.publicRun(session, run)) : send(response, 404, { error: "Unknown agent run" });
+      }
+      if (request.method === "POST" && tail === "reviews") {
+        let body;
+        try { body = await readBody(request, 4096); }
+        catch (_) { return send(response, 400, { error: "Invalid review request" }); }
+        try { return send(response, 201, await reviewStore.review(session, body)); }
+        catch (error) { return send(response, 400, { error: error.message }); }
+      }
+      const evidenceMatch = tail.match(/^evidence\/([a-f0-9-]{36})\/(source|mask)$/);
+      if (request.method === "GET" && evidenceMatch) {
+        const item = session.evidence?.[evidenceMatch[1]];
+        if (!item) return send(response, 404, { error: "Unknown evidence" });
+        const candidate = session.candidates.find(candidate => candidate.id === item.candidate_id);
+        const reviewed = Object.values(session.reviews).some(review => review.candidate_id === item.candidate_id && review.stage === "timed");
+        if (candidate?.arm === "baseline" && !reviewed) return send(response, 403, { error: "Evidence withheld until timed review" });
+        const bytes = await readFile(reviewStore.path(session.id, evidenceMatch[2] === "source" ? item.source_name : item.overlay_name));
+        return send(response, 200, bytes, "image/jpeg");
+      }
+      if (request.method === "GET" && (tail === "export" || tail === "bundle")) {
+        const complete = session.candidates.every(candidate => Object.values(session.reviews).some(review => review.candidate_id === candidate.id && review.stage === "timed"));
+        if (!complete) return send(response, 409, { error: "Review every candidate before full export" });
+        const record = { ...session, exported_at: new Date().toISOString(), model_note: "Agent suggestions are advisory. Only human decisions determine accepted fans." };
+        if (tail === "export") return send(response, 200, record);
+        const files = { "review.json": strToU8(JSON.stringify(record, null, 2)), "events.jsonl": new Uint8Array(await readFile(reviewStore.path(session.id, "events.jsonl"))) };
+        const sourceName = "working-image." + (session.image.format === "png" ? "png" : "jpg");
+        files[sourceName] = new Uint8Array(await reviewStore.source(session));
+        files["detector-responses.json"] = new Uint8Array(await readFile(reviewStore.path(session.id, "detector-responses.json")));
+        for (const evidence of Object.values(session.evidence)) {
+          files[`evidence/${evidence.source_name}`] = new Uint8Array(await readFile(reviewStore.path(session.id, evidence.source_name)));
+          files[`evidence/${evidence.overlay_name}`] = new Uint8Array(await readFile(reviewStore.path(session.id, evidence.overlay_name)));
+        }
+        const zip = zipSync(files, { level: 0 });
+        response.writeHead(200, { "content-type": "application/zip", "content-disposition": `attachment; filename="mars-fan-review-${session.id}.zip"`, "cache-control": "no-store" });
+        return response.end(Buffer.from(zip));
+      }
+      return send(response, 404, { error: "Unknown review route" });
     }
     if (request.method === "POST" && url.pathname === "/api/scout/infer") {
       if (!access.authorized(request.headers["x-demo-access-code"])) return send(response, 401, { error:"Enter the demo access code to scan" });

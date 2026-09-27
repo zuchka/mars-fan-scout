@@ -4,12 +4,25 @@ A live, human-in-the-loop Mars image review demo. Upload a compatible south-pola
 
 **Live demo:** [mars.zuchka.dev](https://mars.zuchka.dev/). Cloudflare serves the custom domain through a Worker that forwards requests to the [Fly Sprite](https://mcp-mars-fan-scout-b3l3w.sprites.app/). Image browsing is public; a private meeting code unlocks live Roboflow scans. The deployment has a persistent 100-tile daily inference limit. See [DEPLOY_SPRITES.md](DEPLOY_SPRITES.md) for operations. Neither safeguard is required for local development.
 
+## Bounded review-agent experiment
+
+The optional experiment adds a **suggestion** beside the existing source pixels and Roboflow mask. For each frozen candidate, the Sprite asks a vision model to propose rejection, request one wider crop from the same working image, or defer to a human. If it requests more context, the Sprite creates and verifies that crop and makes one follow-up vision call. Every candidate remains in the human queue; the agent cannot accept a fan, choose a source end, or publish a direction. The implementation and pilot protocol are in [AGENT_REVIEW_PLAN.md](AGENT_REVIEW_PLAN.md).
+
+Install dependencies with `npm ci` using Node 20.9 or newer, then start with `npm start`. The main Roboflow scan still works without a review-agent key. To enable paid review calls, set `DEMO_ACCESS_CODE`, `REVIEW_AGENT_ENABLED=1`, `OPENAI_API_KEY`, and positive `REVIEW_AGENT_DAILY_CALL_LIMIT`, `REVIEW_AGENT_DAILY_USD_LIMIT`, and `REVIEW_AGENT_PER_CANDIDATE_USD_LIMIT` in the server's private environment. The latter two must each permit at least $0.02. The provider is pinned to `gpt-4.1-mini-2025-04-14`; its current rates and usage are recorded with each run. The server reserves $0.01 before each call, permits at most two calls per candidate, and leaves unknown charges reserved. The meeting code protects session, evidence, review, and export routes. The feature is off by default.
+
+In the right rail, choose a fixed crop or scan a new image. Check the retention notice and start an experiment session. For the fixed pilot, Reviewer A selects **Blinded reference** and reviews every candidate first. Then run the agent on the full fixed queue. Reviewer B uses a different reviewer ID, selects **Timed review**, and reviews every candidate once. Baseline-arm advice is withheld by the server until that candidate's timed decision is saved. Both arms can manually inspect a wider view. Use **Adjudication** to record a later pixel-based judgment without seeing agent advice. A session ID can be resumed in the same panel. When every timed review is saved, download the ZIP containing the working image, detector responses, evidence crops, event journal, and review JSON.
+
+The fixed manifest in `evaluation/agent-review/manifest.json` currently contains **44** deduplicated candidates from six previously inspected evaluation crops: all 32 candidates above 35% after the app's duplicate suppression, plus two seeded 20–35% candidates per crop. This is a reused feasibility set, not a new untouched test. A curator should verify that obvious false positives and ambiguous shapes are represented before any paid batch run. `npm run prepare:agent-review` deterministically rebuilds the manifest; freeze and commit it before evaluation. Once complete session exports exist, run `npm run report:agent-review -- path/to/export.json [more-exports.json]` to write `evaluation/agent-review/metrics.json` and `report.md`. No measured time savings or missed-fan result exists yet.
+
+Experiment images and audit records live outside `public/` in ignored `.review-agent/`; the separate budget ledger is `.review-agent-budget.json`. The target retention period is 30 days, configurable with `REVIEW_AGENT_RETENTION_DAYS`; the operator must run the cleanup command. `npm run purge:agent-review` previews expired sessions; append `-- --apply` after exporting them to purge. The cleanup is manual, and the archived detector evaluation is unaffected.
+
 ## Run the demo
 
 From this directory:
 
 ```sh
-node server.mjs
+npm ci
+npm start
 ```
 
 Open <http://127.0.0.1:4173>. The existing local `.env.local` contains the configured Roboflow API key; it is ignored and must not be committed or shared. On another computer, copy `.env.example` to `.env.local` and set `ROBOFLOW_API_KEY`, `ROBOFLOW_MODEL_ID`, and `ROBOFLOW_MODEL_TRAINING=0`. The server keeps the key out of browser assets. The primary app requires a live model connection; a replay is available only in the clearly labeled historical atlas.

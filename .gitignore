@@ -10,3 +10,5 @@ data/
 .demo-usage.json
 .sprite
 .sprite/
+.review-agent/
+.review-agent-budget.json

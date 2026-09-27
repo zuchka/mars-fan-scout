@@ -1,0 +1,29 @@
+{
+  "name": "mars-weather",
+  "version": "1.0.0",
+  "description": "Roboflow Mars fan evidence viewer and bounded human-reviewed vision-agent experiment.",
+  "type": "module",
+  "engines": { "node": ">=20.9.0" },
+  "scripts": {
+    "start": "node server.mjs",
+    "test": "node --test scripts/*.test.mjs",
+    "prepare:agent-review": "node scripts/prepare_agent_review.mjs",
+    "report:agent-review": "node scripts/report_agent_review.mjs",
+    "purge:agent-review": "node scripts/purge_review_sessions.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zuchka/mars-fan-scout.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/zuchka/mars-fan-scout/issues"
+  },
+  "homepage": "https://github.com/zuchka/mars-fan-scout#readme",
+  "dependencies": {
+    "fflate": "0.8.3",
+    "sharp": "0.35.5"
+  }
+}
