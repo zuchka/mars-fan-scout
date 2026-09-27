@@ -1,12 +1,15 @@
 import { randomUUID } from "node:crypto";
 import { makeEvidence } from "./evidence.mjs";
-import { MODEL, PROMPT_VERSION, RATE, validateAction } from "./provider.mjs";
+import { MODEL, PROMPT_VERSION } from "./provider.mjs";
+import { POLICY_VERSION, reviewDecision } from "./jev-policy.mjs";
 
 const now = () => new Date().toISOString();
 
 export class ReviewRunner {
-  constructor({ store, budget, provider }) {
+  constructor({ store, budget, provider, policy = {} }) {
     this.store = store; this.budget = budget; this.provider = provider;
+    this.policy = { minProbability: Number(policy.minProbability ?? 0.8), minMargin: Number(policy.minMargin ?? 0.25) };
+    if (![this.policy.minProbability, this.policy.minMargin].every(value => Number.isFinite(value) && value >= 0 && value <= 1)) throw new Error("Invalid Jev review thresholds");
     this.queue = []; this.working = false;
   }
   get enabled() { return !!this.provider && this.budget.enabled; }
@@ -19,7 +22,9 @@ export class ReviewRunner {
     if (Object.values(session.runs).some(run => run.candidates.some(id => ids.includes(id)))) throw new Error("Candidate already has an agent run");
     const id = randomUUID();
     const run = { id, status: "queued", created_at: now(), started_at: null, finished_at: null,
-      candidates: ids, results: {}, model: MODEL, prompt_version: PROMPT_VERSION, rate: RATE };
+      candidates: ids, results: {}, model: this.provider.metadata?.model || MODEL,
+      provider: this.provider.metadata || { provider: "Jev-Omni" }, prompt_version: PROMPT_VERSION,
+      policy_version: POLICY_VERSION, policy: { ...this.policy } };
     session.runs[id] = run;
     session.idempotency[key] = id;
     await this.store.event(session, "run_queued", { run_id: id, candidates: ids });
@@ -38,7 +43,7 @@ export class ReviewRunner {
         for (const id of run.candidates) {
           const candidate = session.candidates.find(item => item.id === id);
           try { run.results[id] = await this.reviewCandidate(session, run, candidate); }
-          catch (error) { run.results[id] = { action: "send_to_human", explanation: "Agent error: " + String(error.message).slice(0, 180), status: "error", trace: [] }; }
+          catch (error) { run.results[id] = { action: "send_to_human", verdict: "unsure", explanation: "Jev error: " + String(error.message).slice(0, 180), explanation_source: "application_rule", status: "error", trace: [], human_review_required: true }; }
           await this.store.event(session, "candidate_terminal", { run_id: run.id, candidate_id: id, result: run.results[id] });
         }
         run.status = "complete"; run.finished_at = now();
@@ -69,18 +74,20 @@ export class ReviewRunner {
     return this.terminal(second.action, trace, started);
   }
   async call(session, run, candidate, evidence, wider, firstAction, trace, started) {
-    const remaining = 75000 - (performance.now() - started);
+    const remaining = 130000 - (performance.now() - started);
     if (remaining <= 0) return null;
     const requestId = randomUUID();
     if (!this.budget.reserve(requestId, `${run.id}:${candidate.id}`)) return null;
-    trace.push({ type: "provider_call_started", request_id: requestId, wider, reserved_usd: 0.01, at: now() });
-    await this.store.event(session, "provider_call_started", { run_id: run.id, candidate_id: candidate.id, request_id: requestId, wider, reserved_usd: 0.01 });
+    trace.push({ type: "provider_call_started", request_id: requestId, wider, reserved_usd: this.budget.reservationUsd, at: now() });
+    await this.store.event(session, "provider_call_started", { run_id: run.id, candidate_id: candidate.id, request_id: requestId, wider, reserved_usd: this.budget.reservationUsd });
     try {
       const result = await this.provider({ candidate, evidence, wider, firstAction, timeout_ms: remaining });
-      const action = validateAction(result.action, wider);
+      const action = reviewDecision(result, { wider, ...run.policy });
       this.budget.reconcile(requestId, result.cost_usd);
       const event = { type: "provider_call_completed", request_id: requestId, wider, action, response_id: result.response_id || null,
-        usage: result.usage || null, cost_usd: result.cost_usd ?? null, latency_ms: result.elapsed_ms ?? null, at: now() };
+        raw_prediction: result.prediction, probabilities: result.probabilities,
+        usage: result.usage || null, cost_usd: result.cost_usd ?? null, cost_basis: result.cost_basis || null,
+        latency_ms: result.elapsed_ms ?? null, at: now() };
       trace.push(event);
       await this.store.event(session, "provider_call_completed", { run_id: run.id, candidate_id: candidate.id, ...event });
       return { action };
@@ -93,7 +100,8 @@ export class ReviewRunner {
   }
   terminal(action, trace, started) { return { ...action, status: "complete", trace, elapsed_ms: Math.round(performance.now() - started), human_review_required: true }; }
   fallback(trace, started, explanation, status = "fallback") {
-    return { action: "send_to_human", explanation, context_check: "unresolved", status, trace,
+    return { action: "send_to_human", verdict: "unsure", explanation, explanation_source: "application_rule",
+      context_check: "unresolved", status, trace,
       elapsed_ms: Math.round(performance.now() - started), human_review_required: true };
   }
   publicRun(session, run) {

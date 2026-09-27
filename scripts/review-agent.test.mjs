@@ -8,7 +8,8 @@ import { ReviewStore } from "../review-agent/store.mjs";
 import { ReviewBudget } from "../review-agent/budget.mjs";
 import { ReviewRunner } from "../review-agent/runner.mjs";
 import { imageInfo, makeEvidence } from "../review-agent/evidence.mjs";
-import { makeOpenAIProvider, validateAction } from "../review-agent/provider.mjs";
+import { makeJevProvider, MODEL_REPO, MODEL_REVISION, validatePrediction } from "../review-agent/provider.mjs";
+import { reviewDecision } from "../review-agent/jev-policy.mjs";
 
 const root = resolve(import.meta.dirname, "..");
 const fixture = JSON.parse(await readFile(resolve(root, "evaluation/agent-review/manifest.json"), "utf8")).crops[0];
@@ -22,7 +23,7 @@ async function setup(t, arm = "assisted") {
   await store.init();
   const session = await store.create({ image_base64: image.toString("base64"), detector_model: "frozen-test",
     candidates: [{ ...candidate, arm }] });
-  const budget = new ReviewBudget(resolve(dir, "budget.json"), { dailyCallLimit: 4, dailyUsdLimit: 1, perRunUsdLimit: .02 });
+  const budget = new ReviewBudget(resolve(dir, "budget.json"), { dailyCallLimit: 4, reservationUsd: 0 });
   return { dir, store, session, budget };
 }
 async function waitRun(run, runner) {
@@ -50,9 +51,9 @@ test("one wider request leads to a second visual call, saved evidence, and requi
   const observations = [];
   const provider = async args => {
     observations.push(args);
-    return { action: args.wider ? { action: "propose_reject", explanation: "Wider pixels show a straight image seam", context_check: "resolved" }
-      : { action: "request_wider_view", explanation: "The edge is ambiguous", context_check: "not_requested" },
-      usage: { input_tokens: 1000, output_tokens: 60 }, cost_usd: .0005, response_id: "fake", elapsed_ms: 3 };
+    return { prediction: args.wider ? "Not a fan" : "Unsure",
+      probabilities: args.wider ? { Fan: .02, "Not a fan": .96, Unsure: .02 } : { Fan: .08, "Not a fan": .02, Unsure: .9 },
+      usage: { input_tokens: 229, generated_tokens: 0 }, cost_usd: null, response_id: "fake", elapsed_ms: 3 };
   };
   const runner = new ReviewRunner({ store, budget, provider });
   const run = await runner.enqueue(session, [session.candidates[0].id], "widercase123");
@@ -63,6 +64,8 @@ test("one wider request leads to a second visual call, saved evidence, and requi
   assert.notDeepEqual(observations[0].evidence.pixels, observations[1].evidence.pixels);
   const result = run.results[session.candidates[0].id];
   assert.equal(result.action, "propose_reject");
+  assert.equal(result.verdict, "not_fan");
+  assert.equal(result.explanation_source, "application_rule");
   assert.equal(result.human_review_required, true);
   assert.ok(result.trace.some(item => item.type === "wider_view_created"));
   assert.equal(Object.keys(session.evidence).length, 2);
@@ -75,7 +78,7 @@ test("one wider request leads to a second visual call, saved evidence, and requi
 
 test("a baseline result stays hidden until a separate timed human decision", async t => {
   const { store, session, budget } = await setup(t, "baseline");
-  const provider = async () => ({ action: { action: "send_to_human", explanation: "Uncertain shape", context_check: "not_requested" }, cost_usd: .0004 });
+  const provider = async () => ({ prediction: "Fan", probabilities: { Fan: .94, "Not a fan": .03, Unsure: .03 }, cost_usd: null });
   const runner = new ReviewRunner({ store, budget, provider });
   const cid = session.candidates[0].id;
   const run = await runner.enqueue(session, [cid], "blindcase123");
@@ -83,17 +86,18 @@ test("a baseline result stays hidden until a separate timed human decision", asy
   assert.deepEqual(runner.publicRun(session, run).results[cid], { hidden_until_review: true, status: "complete" });
   await store.review(session, { candidate_id: cid, stage: "timed", reviewer: "reviewer-b", decision: "unsure", duration_ms: 1234 });
   assert.equal(runner.publicRun(session, run).results[cid].action, "send_to_human");
+  assert.equal(runner.publicRun(session, run).results[cid].verdict, "fan");
   await assert.rejects(store.review(session, { candidate_id: cid, stage: "timed", reviewer: "reviewer-b", decision: "accepted" }), /already saved/);
 });
 
 test("malformed follow-up and exhausted budget fail toward human review", async t => {
-  assert.throws(() => validateAction({ action: "propose_reject", explanation: "Maybe", context_check: "unresolved" }, true));
+  assert.throws(() => validatePrediction({ prediction: "Not a fan", probabilities: { Fan: .3, "Not a fan": .3, Unsure: .3 } }));
   const { store, session, budget } = await setup(t);
   budget.dailyCallLimit = 1;
   let calls = 0;
   const runner = new ReviewRunner({ store, budget, provider: async () => {
     calls++;
-    return { action: { action: "request_wider_view", explanation: "Need context", context_check: "not_requested" }, cost_usd: .0005 };
+    return { prediction: "Unsure", probabilities: { Fan: .04, "Not a fan": .04, Unsure: .92 }, cost_usd: null };
   } });
   const cid = session.candidates[0].id;
   const run = await runner.enqueue(session, [cid], "budgetcase12");
@@ -103,21 +107,41 @@ test("malformed follow-up and exhausted budget fail toward human review", async 
   assert.equal(budget.state.calls, 1);
 });
 
-test("provider sends two real image inputs, structured action schema, and no server-side storage request", async () => {
+test("Jev provider sends one marked image and verifies the pinned model identity", async () => {
   const info = await imageInfo(image);
   const evidence = await makeEvidence(image, info, candidate, "initial");
   let request;
-  const provider = makeOpenAIProvider({ key: "test-only", fetchImpl: async (_url, options) => {
+  const provider = makeJevProvider({ url: "http://127.0.0.1:8765", fetchImpl: async (_url, options) => {
     request = JSON.parse(options.body);
-    return { ok: true, json: async () => ({ status: "completed", id: "test-response", usage: { input_tokens: 900, output_tokens: 40 },
-      output: [{ content: [{ type: "output_text", text: JSON.stringify({ action: "send_to_human", explanation: "Unclear pixels", context_check: "not_requested" }) }] }] }) };
+    return { ok: true, json: async () => ({ model_repo: MODEL_REPO, model_revision: MODEL_REVISION, backend: "cuda-bf16",
+      request_id: "test-response", prediction: "Fan", probabilities: { Fan: .9, "Not a fan": .05, Unsure: .05 },
+      metrics: { generated_tokens: 0 } }) };
   } });
   const result = await provider({ candidate, evidence, wider: false });
-  assert.equal(result.action.action, "send_to_human");
-  assert.equal(request.store, false);
-  assert.equal(request.input[0].content.filter(item => item.type === "input_image").length, 2);
-  assert.equal(request.text.format.type, "json_schema");
-  assert.ok(result.cost_usd > 0);
+  assert.equal(result.prediction, "Fan");
+  assert.equal(request.options.length, 3);
+  assert.deepEqual(Buffer.from(request.image_base64, "base64"), evidence.overlay);
+  assert.equal(result.cost_usd, null);
+});
+
+test("Jev scores produce three explicit verdicts and conservative wider-view requests", () => {
+  const notFan = { prediction: "Not a fan", probabilities: { Fan: .02, "Not a fan": .95, Unsure: .03 } };
+  const fan = { prediction: "Fan", probabilities: { Fan: .93, "Not a fan": .03, Unsure: .04 } };
+  const weak = { prediction: "Not a fan", probabilities: { Fan: .3, "Not a fan": .45, Unsure: .25 } };
+  assert.equal(reviewDecision(notFan).action, "propose_reject");
+  assert.equal(reviewDecision(fan).verdict, "fan");
+  assert.equal(reviewDecision(fan).action, "send_to_human");
+  assert.equal(reviewDecision(weak).action, "request_wider_view");
+  assert.equal(reviewDecision(weak, { wider: true }).verdict, "unsure");
+});
+
+test("local Jev call allowance does not mistake compute estimates for an API spending cap", async t => {
+  const { dir } = await setup(t);
+  const budget = new ReviewBudget(resolve(dir, "jev-budget.json"), { dailyCallLimit: 2, reservationUsd: 0 });
+  assert.equal(budget.reserve("first", "run"), true);
+  budget.reconcile("first", .001);
+  assert.equal(budget.reserve("second", "run"), true);
+  assert.equal(budget.reserve("third", "run"), false);
 });
 
 test("restart turns an interrupted paid run into visible human review without retrying", async t => {
@@ -132,7 +156,7 @@ test("restart turns an interrupted paid run into visible human review without re
   const recovered = restarted.get(session.id).runs["bfc945a5-c5e4-49ae-96e1-c4a9e562d4a9"];
   assert.equal(recovered.status, "interrupted");
   assert.equal(recovered.results[cid].action, "send_to_human");
-  const newBudget = new ReviewBudget(resolve(dir, "budget.json"), { dailyCallLimit: 4, dailyUsdLimit: 1, perRunUsdLimit: .02 });
+  const newBudget = new ReviewBudget(resolve(dir, "budget.json"), { dailyCallLimit: 4, reservationUsd: 0 });
   assert.equal(newBudget.state.calls, 1);
   assert.equal(newBudget.state.reservations["unresolved-call"].cost_usd, null);
 });

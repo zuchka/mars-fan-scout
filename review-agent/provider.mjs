@@ -1,51 +1,72 @@
-export const MODEL = "gpt-4.1-mini-2025-04-14";
-export const PROMPT_VERSION = "fan-triage-1";
-export const RATE = { input_per_million_usd: 0.4, output_per_million_usd: 1.6, effective_date: "2026-09-27",
-  basis: "Uncached standard token rates; costs are estimates from reported usage" };
-const schema = {
-  type: "object", additionalProperties: false,
-  properties: {
-    action: { type: "string", enum: ["propose_reject", "request_wider_view", "send_to_human"] },
-    explanation: { type: "string" },
-    context_check: { type: "string", enum: ["not_requested", "resolved", "unresolved"] },
-  }, required: ["action", "explanation", "context_check"],
-};
+export const MODEL_REPO = "akhilaaa3/Jev-Omni";
+export const MODEL_REVISION = "5addda86ddee081a68fb067477ea100c221b8917";
+export const MLX_SOURCE_REVISION = "c050d51354147985d13286cf4acf90f562f2c631";
+export const MODEL = `${MODEL_REPO}@${MODEL_REVISION}`;
+export const PROMPT_VERSION = "mars-fan-jev-choice-1";
+export const OPTIONS = ["Fan", "Not a fan", "Unsure"];
+export const QUESTION = "Is the orange-outlined candidate a Martian polar fan deposit?";
+export const STATE = "This is a crop of a south-polar HiRISE image of Mars. The thin orange outline identifies one Roboflow candidate; judge only the deposit inside that outline using the image pixels. A polar fan is a dark, asymmetric deposit that spreads from a narrower source. A dark spot, shadow, image seam, or indistinct shape need not be a fan. Choose Unsure when the visible pixels cannot distinguish the possibilities. Do not infer wind direction.";
 
-export function validateAction(value, wider = false) {
-  if (!value || !["propose_reject", "request_wider_view", "send_to_human"].includes(value.action) || typeof value.explanation !== "string" || !value.explanation.trim() || value.explanation.length > 500 || !["not_requested", "resolved", "unresolved"].includes(value.context_check)) throw new Error("Invalid vision response");
-  if (wider && (value.action === "request_wider_view" || value.context_check === "not_requested")) throw new Error("Invalid follow-up action");
-  if (wider && value.action === "propose_reject" && value.context_check !== "resolved") throw new Error("Unresolved wider context cannot support rejection");
-  if (!wider && value.context_check !== "not_requested") throw new Error("Invalid initial context check");
-  return { action: value.action, explanation: value.explanation.trim(), context_check: value.context_check };
+const scoreKeys = new Set(OPTIONS);
+
+export function validatePrediction(value) {
+  if (!value || typeof value !== "object" || !value.probabilities || typeof value.probabilities !== "object") throw new Error("Invalid Jev response");
+  const keys = Object.keys(value.probabilities);
+  if (keys.length !== OPTIONS.length || !keys.every(key => scoreKeys.has(key))) throw new Error("Invalid Jev options");
+  const probabilities = Object.fromEntries(OPTIONS.map(option => [option, Number(value.probabilities[option])]));
+  const scores = Object.values(probabilities);
+  if (!scores.every(score => Number.isFinite(score) && score >= 0 && score <= 1) || Math.abs(scores.reduce((a, b) => a + b, 0) - 1) > 0.01) throw new Error("Invalid Jev probabilities");
+  if (!scoreKeys.has(value.prediction)) throw new Error("Invalid Jev prediction");
+  const best = OPTIONS.reduce((a, b) => probabilities[b] > probabilities[a] ? b : a);
+  if (value.prediction !== best) throw new Error("Jev prediction disagrees with probabilities");
+  return { prediction: best, probabilities };
 }
 
-export function makeOpenAIProvider({ key, fetchImpl = fetch }) {
-  if (!key) throw new Error("Vision provider key is missing");
-  return async ({ candidate, evidence, wider, firstAction, timeout_ms = 30000 }) => {
-    const prompt = wider
-      ? `This is the wider view requested for candidate ${candidate.id}. Initial ambiguity: ${firstAction.explanation}. Inspect the new source pixels and aligned mask. Return propose_reject only if visual evidence now supports a clear non-fan explanation; otherwise send_to_human. State whether the wider view resolved the ambiguity. JSON only.`
-      : `Candidate ${candidate.id} has Roboflow confidence ${(candidate.confidence * 100).toFixed(1)}%. Inspect the unmarked source crop and the same crop with its detector mask. Choose propose_reject, request_wider_view, or send_to_human. A low detector score alone does not justify rejection. If the shape could be a real fan or the pixels are unclear, request more context or defer. Do not infer direction, source end, wind, or scientific discovery. Give a concise visual explanation. JSON only.`;
-    const input = [{ role: "user", content: [
-      { type: "input_text", text: prompt },
-      { type: "input_image", image_url: `data:image/jpeg;base64,${evidence.pixels.toString("base64")}`, detail: "high" },
-      { type: "input_image", image_url: `data:image/jpeg;base64,${evidence.overlay.toString("base64")}`, detail: "high" },
-    ] }];
+export function validateServiceUrl(value, token = "") {
+  const url = new URL(value);
+  const loopback = ["127.0.0.1", "localhost", "[::1]"].includes(url.hostname);
+  if (!loopback && (url.protocol !== "https:" || !token)) throw new Error("Remote Jev service requires HTTPS and a bearer token");
+  if (loopback && !["http:", "https:"].includes(url.protocol)) throw new Error("Invalid Jev service protocol");
+  if (url.username || url.password || url.search || url.hash || url.pathname !== "/") throw new Error("Jev service URL must be an origin");
+  return url.origin;
+}
+
+export function makeJevProvider({ url, token = "", imageTokens = null, expectedRevision = MODEL_REVISION,
+  expectedBackend = "cuda-bf16",
+  computeUsdPerHour = null, fetchImpl = fetch }) {
+  const origin = validateServiceUrl(url, token);
+  if (imageTokens !== null && ![20, 35, 70, 140, 280].includes(Number(imageTokens))) throw new Error("Invalid Jev image token budget");
+  const hourly = computeUsdPerHour === null || computeUsdPerHour === "" ? null : Number(computeUsdPerHour);
+  if (hourly !== null && (!Number.isFinite(hourly) || hourly < 0)) throw new Error("Invalid Jev compute rate");
+  const headers = token ? { authorization: `Bearer ${token}` } : {};
+  const metadata = { provider: "Jev-Omni", model: `${MODEL_REPO}@${expectedRevision}`, backend: expectedBackend,
+    prompt_version: PROMPT_VERSION, options: OPTIONS, image_tokens: imageTokens === null ? null : Number(imageTokens),
+    compute_usd_per_hour: hourly, cost_basis: hourly === null ? "Compute cost unmeasured; no OpenAI API charge" : "Estimated active inference time only; idle hosting excluded" };
+  const provider = async ({ evidence, timeout_ms = 60000 }) => {
     const started = performance.now();
-    const response = await fetchImpl("https://api.openai.com/v1/responses", {
-      method: "POST", headers: { authorization: `Bearer ${key}`, "content-type": "application/json" },
-      body: JSON.stringify({ model: MODEL, store: false, temperature: 0, max_output_tokens: 180, input,
-        text: { format: { type: "json_schema", name: "fan_review_action", strict: true, schema } } }),
-      signal: AbortSignal.timeout(Math.min(30000, timeout_ms)),
+    const response = await fetchImpl(`${origin}/classify`, {
+      method: "POST", headers: { ...headers, "content-type": "application/json" },
+      body: JSON.stringify({ image_base64: evidence.overlay.toString("base64"), state: STATE,
+        question: QUESTION, options: OPTIONS, image_tokens: imageTokens === null ? null : Number(imageTokens) }),
+      signal: AbortSignal.timeout(Math.min(60000, timeout_ms)),
     });
+    if (!response.ok) throw new Error(`Jev service HTTP ${response.status}`);
+    const body = await response.json();
+    if (body.model_repo !== MODEL_REPO || body.model_revision !== expectedRevision || body.backend !== expectedBackend) throw new Error("Jev checkpoint mismatch");
+    const prediction = validatePrediction(body);
     const elapsed_ms = Math.round(performance.now() - started);
-    if (!response.ok) throw new Error(`Vision provider HTTP ${response.status}`);
-    const data = await response.json();
-    const text = data.output?.flatMap(item => item.content || []).find(item => item.type === "output_text")?.text;
-    if (data.status !== "completed" || !text) throw new Error("Vision provider returned no completed action");
-    const action = validateAction(JSON.parse(text), wider);
-    const usage = data.usage ? { input_tokens: data.usage.input_tokens, output_tokens: data.usage.output_tokens } : null;
-    const cost_usd = usage && Number.isFinite(usage.input_tokens) && Number.isFinite(usage.output_tokens)
-      ? (usage.input_tokens * RATE.input_per_million_usd + usage.output_tokens * RATE.output_per_million_usd) / 1e6 : null;
-    return { action, usage, cost_usd, response_id: data.id || null, elapsed_ms };
+    return { ...prediction, elapsed_ms, response_id: typeof body.request_id === "string" ? body.request_id : null,
+      usage: body.metrics && typeof body.metrics === "object" ? body.metrics : null,
+      cost_usd: hourly === null ? null : elapsed_ms * hourly / 3600000,
+      cost_basis: metadata.cost_basis };
   };
+  provider.metadata = metadata;
+  provider.probe = async () => {
+    const response = await fetchImpl(`${origin}/health`, { headers, signal: AbortSignal.timeout(5000) });
+    if (!response.ok) throw new Error(`Jev health HTTP ${response.status}`);
+    const body = await response.json();
+    if (!body.ready || body.model_repo !== MODEL_REPO || body.model_revision !== expectedRevision || body.backend !== expectedBackend) throw new Error("Jev service is not ready with the pinned checkpoint");
+    return body;
+  };
+  return provider;
 }

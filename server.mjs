@@ -8,7 +8,7 @@ import { zipSync, strToU8 } from "fflate";
 import { ReviewStore } from "./review-agent/store.mjs";
 import { ReviewBudget } from "./review-agent/budget.mjs";
 import { ReviewRunner } from "./review-agent/runner.mjs";
-import { makeOpenAIProvider, MODEL as reviewModel } from "./review-agent/provider.mjs";
+import { makeJevProvider, MODEL as reviewModel, MLX_SOURCE_REVISION } from "./review-agent/provider.mjs";
 
 const root = resolve(fileURLToPath(new URL(".", import.meta.url)));
 const publicDir = resolve(root, "public");
@@ -45,12 +45,23 @@ const reviewStore = new ReviewStore(resolve(root, process.env.REVIEW_AGENT_DATA_
 await reviewStore.init();
 const reviewBudget = new ReviewBudget(resolve(root, ".review-agent-budget.json"), {
   dailyCallLimit: process.env.REVIEW_AGENT_DAILY_CALL_LIMIT,
-  dailyUsdLimit: process.env.REVIEW_AGENT_DAILY_USD_LIMIT,
-  perRunUsdLimit: process.env.REVIEW_AGENT_PER_CANDIDATE_USD_LIMIT,
+  reservationUsd: 0,
 });
-const reviewProvider = process.env.REVIEW_AGENT_ENABLED === "1" && process.env.OPENAI_API_KEY
-  ? makeOpenAIProvider({ key: process.env.OPENAI_API_KEY }) : null;
-const reviewRunner = new ReviewRunner({ store: reviewStore, budget: reviewBudget, provider: reviewProvider });
+let reviewProvider = null;
+if (process.env.REVIEW_AGENT_ENABLED === "1" && process.env.JEV_SERVICE_URL) {
+  const backend = process.env.JEV_BACKEND || "cuda-bf16";
+  const candidateProvider = makeJevProvider({
+    url: process.env.JEV_SERVICE_URL, token: process.env.JEV_SERVICE_TOKEN || "",
+    expectedBackend: backend,
+    expectedRevision: backend === "mlx-4bit" ? MLX_SOURCE_REVISION : undefined,
+    imageTokens: backend === "mlx-4bit" ? Number(process.env.JEV_IMAGE_TOKENS || 70) : null,
+    computeUsdPerHour: process.env.JEV_COMPUTE_USD_PER_HOUR || null,
+  });
+  try { await candidateProvider.probe(); reviewProvider = candidateProvider; }
+  catch (error) { console.error("Jev service unavailable:", error.message); }
+}
+const reviewRunner = new ReviewRunner({ store: reviewStore, budget: reviewBudget, provider: reviewProvider,
+  policy: { minProbability: Number(process.env.JEV_MIN_PROBABILITY || 0.8), minMargin: Number(process.env.JEV_MIN_MARGIN || 0.25) } });
 const reviewFixtures = JSON.parse(readFileSync(resolve(root, "evaluation/agent-review/manifest.json"), "utf8"));
 
 function send(response, status, data, type = "application/json; charset=utf-8") {
@@ -156,7 +167,8 @@ const server = createServer(async (request, response) => {
     if (request.method === "GET" && url.pathname === "/api/status") {
       const granted = access.authorized(request.headers["x-demo-access-code"]);
       return send(response, 200, { ready, scout_ready:configured && !training && !replay, configured, training:training && !replay, mode:replay ? "recorded" : "live", model_id:modelIdValid ? modelId : null, access_required:access.accessRequired, access_granted:granted, daily_remaining:granted ? access.remaining() : null,
-        review_agent: granted ? { ...reviewBudget.status(), enabled: reviewRunner.enabled && reviewBudget.status().enabled, model: reviewModel } : { enabled: false } });
+        review_agent: granted ? { ...reviewBudget.status(), enabled: reviewRunner.enabled,
+          model: reviewProvider?.metadata?.model || reviewModel, backend: reviewProvider?.metadata?.backend || null } : { enabled: false } });
     }
     if (request.method === "GET" && url.pathname === "/api/scout/evaluation") {
       try {

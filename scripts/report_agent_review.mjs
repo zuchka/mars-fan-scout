@@ -40,6 +40,16 @@ const metrics = {
   median_active_seconds: { baseline: median(baseline), assisted: median(assisted) },
   descriptive_median_difference_seconds: median(baseline) !== null && median(assisted) !== null ? median(baseline) - median(assisted) : null,
   proposed_rejections: proposed.length,
+  jev_verdicts: {
+    fan: count(row => row.result?.verdict === "fan"),
+    not_fan: count(row => row.result?.verdict === "not_fan"),
+    unsure: count(row => row.result?.verdict === "unsure"),
+  },
+  jev_raw_top_choices: {
+    fan: count(row => row.result?.prediction === "Fan"),
+    not_fan: count(row => row.result?.prediction === "Not a fan"),
+    unsure: count(row => row.result?.prediction === "Unsure"),
+  },
   proposed_rejections_reference_accepted: proposed.filter(row => row.reference === "accepted").length,
   proposed_rejections_reference_rejected: proposed.filter(row => row.reference === "rejected").length,
   proposed_rejections_reference_unsure: proposed.filter(row => row.reference === "unsure").length,
@@ -54,24 +64,24 @@ const metrics = {
     baseline: count(row => row.arm === "baseline" && row.reference && row.timed && row.reference !== row.timed),
     assisted: count(row => row.arm === "assisted" && row.reference && row.timed && row.reference !== row.timed),
   },
-  known_agent_cost_usd: knownCost, calls_with_unknown_cost: unknownCost,
-  cost_per_reference_confirmed_rejection_usd: proposed.filter(row => row.reference === "rejected").length && !unknownCost ? knownCost / proposed.filter(row => row.reference === "rejected").length : null,
+  estimated_active_compute_usd: knownCost, calls_with_unmeasured_compute: unknownCost,
+  estimated_active_compute_per_reference_confirmed_rejection_usd: proposed.filter(row => row.reference === "rejected").length && !unknownCost ? knownCost / proposed.filter(row => row.reference === "rejected").length : null,
   rows,
 };
 const format = value => value === null ? "not available" : String(value);
 const widerRows = rows.filter(row => row.result?.trace?.some(item => item.type === "wider_view_created"));
-const widerTable = widerRows.length ? "\n## Wider-view trajectories\n\n| Candidate | Initial reason | Final advice | Human reference |\n| --- | --- | --- | --- |\n" +
+const widerTable = widerRows.length ? "\n## Wider-view trajectories\n\n| Candidate | Initial rule result | Final advice | Human reference |\n| --- | --- | --- | --- |\n" +
   widerRows.map(row => {
     const first = row.result.trace.find(item => item.type === "provider_call_completed" && item.action?.action === "request_wider_view");
     const cell = value => String(value ?? "unknown").replaceAll("|", "\\|").replaceAll("\n", " ");
     return `| ${cell(row.label)} | ${cell(first?.action?.explanation)} | ${cell(row.result.action)}: ${cell(row.result.explanation)} | ${cell(row.reference)} |`;
   }).join("\n") + "\n" : "\nNo wider views were requested.\n";
-const report = `# Bounded review-agent pilot\n\nGenerated from ${sessions.length} completed session export(s). These reused locked crops are a small non-expert pilot, not new independent scientific ground truth.\n\n` +
+const report = `# Jev-Omni fan-triage pilot\n\nGenerated from ${sessions.length} completed session export(s). These reused locked crops are a small non-expert pilot, not new independent scientific ground truth. Jev returns option probabilities, not a visual explanation.\n\n` +
   `- Candidates: ${rows.length}; timed human-only reviews: ${baseline.length}; timed assisted reviews: ${assisted.length}.\n` +
   `- Median active human review time: human-only ${format(metrics.median_active_seconds.baseline)} s; assisted ${format(metrics.median_active_seconds.assisted)} s. Descriptive difference: ${format(metrics.descriptive_median_difference_seconds)} s.\n` +
-  `- Agent proposed rejection for ${proposed.length} candidates. Blinded/adjudicated outcomes: ${metrics.proposed_rejections_reference_accepted} accepted, ${metrics.proposed_rejections_reference_rejected} rejected, ${metrics.proposed_rejections_reference_unsure} unsure.\n` +
+  `- Jev raw top choices: ${metrics.jev_raw_top_choices.fan} fan, ${metrics.jev_raw_top_choices.not_fan} not fan, ${metrics.jev_raw_top_choices.unsure} unsure. Conservative review-rule verdicts: ${metrics.jev_verdicts.fan} fan, ${metrics.jev_verdicts.not_fan} not fan, ${metrics.jev_verdicts.unsure} unsure. Agent proposed rejection for ${proposed.length} candidates. Blinded/adjudicated outcomes for those proposals: ${metrics.proposed_rejections_reference_accepted} accepted, ${metrics.proposed_rejections_reference_rejected} rejected, ${metrics.proposed_rejections_reference_unsure} unsure.\n` +
   `- ${metrics.wider_requests} wider views; ${metrics.agent_fallbacks} fallbacks; ${metrics.timed_reference_disagreements} timed-review disagreements with blinded/adjudicated labels (${metrics.disagreements_by_arm.baseline} human-only, ${metrics.disagreements_by_arm.assisted} assisted). Median agent latency: ${format(metrics.agent_latency_median_seconds)} s.\n` +
-  `- Estimated incremental vision-provider cost at uncached list rates: $${knownCost.toFixed(5)}; ${unknownCost} calls have unknown cost. Estimated cost per reference-confirmed rejection: ${format(metrics.cost_per_reference_confirmed_rejection_usd)} USD. Roboflow detector expense is separate.\n\n` +
+  `- Estimated active Jev compute cost: $${knownCost.toFixed(5)}; ${unknownCost} calls have unmeasured compute cost. This excludes idle GPU hosting, so it is not a total hosting bill. Estimated active compute per reference-confirmed rejection: ${format(metrics.estimated_active_compute_per_reference_confirmed_rejection_usd)} USD. Roboflow detector expense is separate.\n\n` +
   `The arms contain different candidates; timing is descriptive. The agent never removed candidates from human review. Missed-fan counts describe hypothetical automation of proposed rejections, not detector recall or a safety guarantee.\n` + widerTable;
 const output = resolve(import.meta.dirname, "../evaluation/agent-review");
 await mkdir(output, { recursive: true });

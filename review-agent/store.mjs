@@ -18,7 +18,7 @@ export class ReviewStore {
           if (["queued", "running"].includes(run.status)) {
             run.status = "interrupted";
             run.finished_at = new Date().toISOString();
-            for (const cid of run.candidates) if (!run.results[cid]) run.results[cid] = { action: "send_to_human", explanation: "Agent run interrupted; billing may be unknown", status: "interrupted" };
+            for (const cid of run.candidates) if (!run.results[cid]) run.results[cid] = { action: "send_to_human", verdict: "unsure", explanation: "Jev run interrupted; compute usage may be unknown", explanation_source: "application_rule", status: "interrupted", human_review_required: true };
           }
         }
         this.sessions.set(name, session);
@@ -64,7 +64,7 @@ export class ReviewStore {
     if (Buffer.byteLength(rawDetector) > 10 * 1024 * 1024) throw new Error("Detector snapshot exceeds 10 MB");
     const id = randomUUID();
     const snapshot_sha256 = sha256(JSON.stringify(candidates));
-    const session = { format: "mars-fan-scout-review-v3", id, created_at: new Date().toISOString(),
+    const session = { format: "mars-fan-scout-review-v4", id, created_at: new Date().toISOString(),
       image: { ...info, original_sha256: clean(body.original_sha256), name: clean(body.name), observation: clean(body.observation) },
       snapshot_sha256, detector_model: clean(body.detector_model), detector_responses_sha256: sha256(rawDetector),
       fixture_id: clean(body.fixture_id), candidates, runs: {}, reviews: {}, evidence: {}, idempotency: {} };

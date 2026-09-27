@@ -671,12 +671,15 @@ function renderAgentSelected(candidate) {
     $("agent-explanation").textContent=result?.hidden_until_review?"Record your decision before advice is revealed.":"The agent has no advice for this candidate yet.";
     clearAgentEvidence();return;
   }
-  $("agent-advice").textContent=result.action==="propose_reject"?"AGENT PROPOSES REJECT · HUMAN REVIEW REQUIRED":"AGENT DEFERS TO HUMAN";
-  $("agent-explanation").textContent=(result.explanation||"No explanation available.")+(Number.isFinite(result.elapsed_ms)?` · Agent ${result.elapsed_ms} ms`:"");
+  const verdict=result.verdict==="fan"?"JEV: FAN":result.verdict==="not_fan"?"JEV: NOT A FAN":result.verdict==="unsure"&&result.prediction&&result.prediction!=="Unsure"?`JEV TOP: ${result.prediction.toUpperCase()} · REVIEW RULE: UNSURE`:result.verdict==="unsure"?"JEV: UNSURE":result.action==="propose_reject"?"AGENT PROPOSES REJECT":"AGENT DEFERS TO HUMAN";
+  $("agent-advice").textContent=`${verdict} · HUMAN REVIEW REQUIRED`;
+  const scores=result.probabilities?Object.entries(result.probabilities).map(([name,score])=>`${name} ${(score*100).toFixed(1)}%`).join(" · "):"";
+  $("agent-explanation").textContent=(result.explanation_source==="application_rule"?"Review rule: ":"")+(result.explanation||"No rule explanation available.")+(scores?` Jev scores: ${scores}.`:"")+(Number.isFinite(result.elapsed_ms)?` · Agent ${result.elapsed_ms} ms`:"");
   for (const event of result.trace||[]) {
     const line=document.createElement("p");
-    const cost=event.cost_usd===null?" · cost unknown":Number.isFinite(event.cost_usd)?" · $"+event.cost_usd.toFixed(5):"";
-    line.textContent=(event.type||"event").replaceAll("_"," ")+(Number.isFinite(event.latency_ms)?" · "+event.latency_ms+" ms":"")+cost;
+    const cost=event.type==="provider_call_completed"?(event.cost_usd===null?" · compute cost unmeasured":Number.isFinite(event.cost_usd)?" · active compute est. $"+event.cost_usd.toFixed(5):""):"";
+    const scores=event.probabilities?" · "+Object.entries(event.probabilities).map(([name,score])=>`${name} ${(score*100).toFixed(1)}%`).join(" / "):"";
+    line.textContent=(event.type||"event").replaceAll("_"," ")+(Number.isFinite(event.latency_ms)?" · "+event.latency_ms+" ms":"")+scores+cost;
     $("agent-timeline").appendChild(line);
   }
   const wider=result.trace?.find(item=>item.type==="wider_view_created");

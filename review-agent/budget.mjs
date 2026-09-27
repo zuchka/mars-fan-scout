@@ -1,25 +1,26 @@
 import { existsSync, readFileSync, writeFileSync, renameSync } from "node:fs";
 
 export class ReviewBudget {
-  constructor(path, { dailyCallLimit, dailyUsdLimit, perRunUsdLimit }) {
+  constructor(path, { dailyCallLimit, dailyUsdLimit, perRunUsdLimit, reservationUsd = 0.01 }) {
     this.path = path;
     this.dailyCallLimit = Number(dailyCallLimit || 0);
     this.dailyUsdLimit = Number(dailyUsdLimit || 0);
     this.perRunUsdLimit = Number(perRunUsdLimit || 0);
-    if (![this.dailyCallLimit, this.dailyUsdLimit, this.perRunUsdLimit].every(Number.isFinite) || this.dailyCallLimit < 0 || this.dailyUsdLimit < 0 || this.perRunUsdLimit < 0) throw new Error("Invalid review budget");
+    this.reservationUsd = Number(reservationUsd);
+    if (![this.dailyCallLimit, this.dailyUsdLimit, this.perRunUsdLimit, this.reservationUsd].every(Number.isFinite) || this.dailyCallLimit < 0 || this.dailyUsdLimit < 0 || this.perRunUsdLimit < 0 || this.reservationUsd < 0) throw new Error("Invalid review budget");
     this.state = existsSync(path) ? JSON.parse(readFileSync(path, "utf8")) : { day: "", calls: 0, spent_usd: 0, reservations: {} };
   }
-  get enabled() { return Number.isInteger(this.dailyCallLimit) && this.dailyCallLimit > 0 && this.dailyUsdLimit >= 0.02 && this.perRunUsdLimit >= 0.02; }
+  get enabled() { return Number.isInteger(this.dailyCallLimit) && this.dailyCallLimit > 0 && (this.reservationUsd === 0 || this.dailyUsdLimit >= 2 * this.reservationUsd && this.perRunUsdLimit >= 2 * this.reservationUsd); }
   persist() { const tmp = this.path + ".tmp"; writeFileSync(tmp, JSON.stringify(this.state), { mode: 0o600 }); renameSync(tmp, this.path); }
   day() {
     const today = new Date().toISOString().slice(0, 10);
     if (this.state.day !== today) { this.state = { day: today, calls: 0, spent_usd: 0, reservations: {} }; this.persist(); }
   }
-  reserve(id, runId, amount = 0.01) {
+  reserve(id, runId, amount = this.reservationUsd) {
     this.day();
-    if (!this.enabled || this.state.calls >= this.dailyCallLimit || this.state.spent_usd + amount > this.dailyUsdLimit + 1e-9) return false;
+    if (!this.enabled || this.state.calls >= this.dailyCallLimit || (this.reservationUsd > 0 && this.state.spent_usd + amount > this.dailyUsdLimit + 1e-9)) return false;
     const runHeld = Object.values(this.state.reservations).filter(item => item.run_id === runId).reduce((sum, item) => sum + item.reserved_usd, 0);
-    if (runHeld + amount > this.perRunUsdLimit + 1e-9) return false;
+    if (this.reservationUsd > 0 && runHeld + amount > this.perRunUsdLimit + 1e-9) return false;
     if (this.state.reservations[id]) return false;
     this.state.calls++;
     this.state.spent_usd += amount;
@@ -35,5 +36,5 @@ export class ReviewBudget {
     this.state.spent_usd += cost - item.reserved_usd;
     this.persist();
   }
-  status() { this.day(); return { enabled: this.enabled, daily_calls_remaining: Math.max(0, this.dailyCallLimit - this.state.calls), daily_usd_remaining: Math.max(0, this.dailyUsdLimit - this.state.spent_usd) }; }
+  status() { this.day(); return { enabled: this.enabled, daily_calls_remaining: Math.max(0, this.dailyCallLimit - this.state.calls), daily_usd_remaining: this.reservationUsd === 0 ? null : Math.max(0, this.dailyUsdLimit - this.state.spent_usd) }; }
 }

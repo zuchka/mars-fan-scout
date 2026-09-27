@@ -12,3 +12,5 @@ data/
 .sprite/
 .review-agent/
 .review-agent-budget.json
+.jev-venv/
+.models/

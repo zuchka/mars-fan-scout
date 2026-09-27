@@ -1,8 +1,8 @@
 # Mars Fan Scout: bounded review-agent experiment
 
-Implementation plan · September 27, 2026 · Status: implemented locally; provider run and human evaluation pending
+Implementation plan · September 27, 2026 · Status: Jev-Omni ran locally on real Mars evidence; live CUDA endpoint and human evaluation pending
 
-Implementation note: the frozen detector responses produce **44** candidates after the app's duplicate suppression: 32 at confidence ≥35% and 12 seeded from 20–35%. The original 45-candidate estimate counted one duplicate. The manifest is in `evaluation/agent-review/manifest.json`. The paid pilot remains disabled until provider credentials, positive budgets, curator category check, and human reviewers are available.
+Implementation note: the frozen detector responses produce **44** candidates after the app's duplicate suppression: 32 at confidence ≥35% and 12 seeded from 20–35%. The original 45-candidate estimate counted one duplicate. The manifest is in `evaluation/agent-review/manifest.json`. The live pilot remains disabled until the private GPU endpoint, call allowance, curator category check, and human reviewers are available. See [jev-runtime/README.md](jev-runtime/README.md) for the pinned model and deployment contract.
 
 **Question:** Can a vision agent save a human time when the detector is unsure, without hiding real fans?
 
@@ -17,7 +17,7 @@ The wider-view branch implements perception, decision, action, and verification:
 | `server.mjs` proxies JPEG tiles to Roboflow; it does not retain full uploaded images. | Add an explicit experiment session that stores the full working image, so the Sprite can crop beyond a detector tile. |
 | `public/scout.js` normalizes and merges masks, renders evidence, and stores human decisions in local storage. | Reuse those masks and UI; add server-persisted experiment records and stable candidate identities. |
 | Candidate labels such as `RF-001` depend on confidence sorting; restored decisions use nearby centers. | Neither is a durable experiment key. Freeze a candidate snapshot and use its identity for agent and human records. |
-| `demo-access.mjs` provides meeting-code access and a persistent Roboflow tile allowance. | Reuse authorization, but give VLM calls their own persistent allowance and spending cap. |
+| `demo-access.mjs` provides meeting-code access and a persistent Roboflow tile allowance. | Reuse authorization, but give Jev calls their own persistent daily call allowance; GPU hosting is billed separately. |
 | `evaluation/locked/` contains six source crops and frozen detector responses. | Create a separate agent-evaluation manifest referencing them; preserve the old detector evaluation. |
 | Human acceptance and a human-selected source end drive directions. | Agent actions never write `decision`, `source_end`, north orientation, or direction fields. |
 
@@ -25,25 +25,25 @@ Use the existing Node service and plain browser JavaScript. Add no general agent
 
 ## 2. Freeze the agent contract
 
-The initial observation includes an unmarked source crop, a separate aligned mask overlay, candidate ID, detector version/confidence, and coordinate metadata. Do not send human labels, old point matches, source-end choices, or wind bearings to the model.
+The initial evidence includes an unmarked source crop and a separate aligned mask overlay, candidate ID, detector version/confidence, and coordinate metadata. Jev receives the marked crop as its one image input; the unmarked crop remains available to humans. Do not send human labels, old point matches, source-end choices, or wind bearings to the model.
 
-The model returns a validated structured action with a short explanation tied to visible evidence:
+Jev returns probabilities for the fixed options **Fan / Not a fan / Unsure** and no generated explanation. A versioned application rule maps those scores to an advisory verdict and one of these actions. Scores below the frozen probability or margin threshold become `unsure`, even when Jev's top option is Fan or Not a fan; record both the raw top option and rule verdict.
 
 | Action | Server behavior |
 | --- | --- |
-| `propose_reject` | Save the proposal and explanation; leave the candidate pending for a human. |
+| `propose_reject` | Save Jev's Not a fan scores and the rule decision; leave the candidate pending for a human. |
 | `request_wider_view` | Generate one deterministic larger crop from the same uploaded working image, persist it, and make one follow-up vision call. |
-| `send_to_human` | Save an abstention and explanation; leave the candidate pending for a human. |
+| `send_to_human` | Save Jev's Fan or Unsure scores and the rule decision; leave the candidate pending for a human. |
 
-The follow-up call can only return `propose_reject` or `send_to_human`. It must say briefly whether the added context resolved the stated ambiguity and cite the evidence IDs it inspected. A low detector score alone is insufficient grounds for rejection; unresolved fan-like shapes go to a human. Do not request or store private model reasoning; a concise evidence explanation is sufficient.
+After a wider crop, the rule can only return `propose_reject` or `send_to_human`. The trace identifies both evidence IDs and whether the rule remains unsure. A low detector score alone is insufficient grounds for rejection; unresolved fan-like shapes go to a human. Never invent a visual explanation on Jev's behalf.
 
 Default bounds, frozen before evaluation:
 
 - One crop request and at most two provider calls per candidate, including retries; disable implicit SDK retries.
 - One running candidate job per Sprite initially, with a bounded queue.
-- A 30-second timeout per provider call and a 75-second execution deadline per candidate; record queue time separately.
-- A configured output-token limit, a positive per-run spending cap, and a positive daily call/spending limit before enabling the shared deployment.
-- Invalid output, unavailable context, provider refusal/error, timeout, or exhausted allowance ends as `send_to_human` with a recorded reason. No automatic rerun after a provider call whose billing outcome is unknown.
+- A 60-second timeout per provider call and a 130-second execution deadline per candidate; record queue time separately.
+- A positive daily Jev call limit before enabling the shared deployment. Hosted GPU run time is governed by the provider account, not this app.
+- Invalid probabilities, unavailable context, provider error, timeout, or exhausted allowance ends as `send_to_human` with a recorded reason. No automatic rerun after an unknown provider outcome.
 
 `propose_reject` is an advisory result, never an automatic reject. Both terminal actions persist a human-review task; the controller verifies that the task and trace were saved. The crop branch additionally checks the generated image and obtains a real second visual assessment. Merely logging “looked again” does not count.
 
@@ -51,7 +51,7 @@ Default bounds, frozen before evaluation:
 
 When someone starts an experiment session, encode the complete `state.canvas` as a lossless PNG and upload it with the frozen candidate snapshot and provenance. This preserves the working pixels from which the JPEG detector tiles were made; the current display JPEG is a separate, lossy encoding. The server decodes the image, verifies bounds, and computes its own hash. Preserve the original-file hash separately: original upload bytes and working-image bytes are different assets. Use a dedicated bounded binary/multipart reader, a 40 MB encoded limit, and the existing maximum of 3072 pixels per side; do not reuse the current 3 MB JPEG-tile reader. Fixed-set sessions instead use the exact saved source JPEG and identify it explicitly.
 
-Store records outside `public/`, under a configurable `.review-agent/` data directory excluded from Git. For this single-process pilot, use immutable session manifests, evidence files, and a serialized append-only event journal. Use atomic manifest writes, durable journal writes, and explicit incomplete-job recovery. A restart turns interrupted jobs into visible human-review fallbacks rather than silently repeating paid calls.
+Store records outside `public/`, under a configurable `.review-agent/` data directory excluded from Git. For this single-process pilot, use immutable session manifests, evidence files, and a serialized append-only event journal. Use atomic manifest writes, durable journal writes, and explicit incomplete-job recovery. A restart turns interrupted jobs into visible human-review fallbacks rather than silently repeating calls.
 
 Use stable IDs derived from the working-image hash, detector snapshot hash, and canonical candidate entry. Keep `RF-001` as a display label only. Retain raw detector responses in `runScan()` instead of discarding them after normalization; store the detector model, raw response provenance, tile offsets and tile-byte hashes, normalization/deduplication version, and any partial-scan failures with the snapshot. A rescan creates a new snapshot; old advice cannot attach to changed masks. Fixed-set sessions load their predictions from the server-owned frozen files.
 
@@ -61,11 +61,11 @@ Implement `request_wider_view(candidate_id)` as a server-controlled operation:
 2. The wider request uses twice that side length, clipped to the complete uploaded working image. It cannot fetch a larger HiRISE observation or invent missing pixels.
 3. Save the unmarked crop and a separate mask overlay, actual bounds, requested bounds, clipping flags, working-to-crop transform, output dimensions, encoding, and hashes. Keep the same appearance normalization as the uploaded image.
 4. Verify it decodes, contains the candidate, and covers additional source pixels. If clipping leaves no additional context, save `context_unavailable` and route to a human without another model call.
-5. Pass the actual generated crop to the second call; retain the first observation and request reason in its context. Record any output resizing so the apparent resolution is auditable.
+5. Pass the actual generated overlay to the second call; retain the first scores and rule decision in the trace. Record any output resizing so the apparent resolution is auditable.
 
 Use Sharp for server image decoding, extraction, and overlay rendering; pin a compatible version after checking the Sprite runtime and installation. Its [installation requirements](https://sharp.pixelplumbing.com/install/) and [extraction API](https://sharp.pixelplumbing.com/api-resize/#extract) support this small image-processing role. Add a package manifest and lockfile because the app currently has neither.
 
-Experiment enrollment must explain that the working image, requested crops, and review trace will now be retained on the Sprite and that evidence crops go to the configured vision provider. Require the existing meeting code on session, evidence, run, review, and export endpoints. Keep model credentials server-side, use opaque session IDs, and serve evidence only through authenticated routes. Document a retention period and an operator cleanup/export command; retain evaluation artifacts through analysis.
+Experiment enrollment must explain that the working image, requested crops, and review trace will now be retained on the Sprite and that marked crops go to the configured private Jev service. Require the existing meeting code on session, evidence, run, review, and export endpoints. Keep endpoint credentials server-side, use opaque session IDs, and serve evidence only through authenticated routes. Document a retention period and an operator cleanup/export command; retain evaluation artifacts through analysis.
 
 ## 4. Implement the runner and audit record
 
@@ -74,10 +74,11 @@ Proposed modules and routes:
 | Component | Responsibility |
 | --- | --- |
 | `review-agent/runner.mjs` | Explicit state transitions, bounded calls, crop dispatch, terminal human tasks, cancellation and fallback. |
-| `review-agent/provider.mjs` | One configured vision model, structured-action parsing, request IDs, usage and rate-card capture. |
+| `review-agent/provider.mjs` | Pinned Jev service, three-way probability validation, backend/revision checks, usage and latency capture. |
+| `review-agent/jev-policy.mjs` | Frozen score thresholds and mapping to wider-view or terminal advisory actions. |
 | `review-agent/evidence.mjs` | Image validation, crop generation, overlays and coordinate transforms. |
 | `review-agent/store.mjs` | Session manifests, event journal, immutable evidence, idempotency and recovery. |
-| `review-agent/budget.mjs` | Persistent call and cost reservations, reconciliation, daily limits. |
+| `review-agent/budget.mjs` | Persistent Jev call reservations and daily limit. |
 | `POST /api/scout/review-sessions` | Create a session and freeze its image/candidates. |
 | `POST /api/scout/review-sessions/:id/runs` | Enqueue explicitly selected candidate IDs; return a run ID immediately. |
 | `GET /api/scout/review-sessions/:id/runs/:runId` | Poll progress and retrieve allowed trace fields. |
@@ -87,19 +88,19 @@ Proposed modules and routes:
 
 Use idempotency keys for run creation and review submission. Switching images must not attach a late result to the new image. Cancel queued work explicitly; persist the outcome of already-started calls even if the browser disconnects. Polling and page refreshes must not initiate inference.
 
-Choose one image-capable provider/model during the implementation spike, verify its structured-output and usage-reporting behavior, and freeze its exact model identifier and settings before the fixed-set run. This plan does not assume an existing VLM credential or price. Record the provider rate card and its effective date; enable the paid feature only when credentials and budgets are configured.
+The chosen reviewer is Jev-Omni, with the original CUDA checkpoint and independent MLX feasibility conversion pinned separately. The live endpoint must report its expected revision and backend. Freeze the image format, prompt, token settings where applicable, and score thresholds before the fixed-set run. Record the GPU provider's hourly rate and pause it when the demo ends.
 
 Each record contains:
 
 - **Identity:** experiment/session/run/candidate IDs, source and working-image hashes, detector response hash, model versions, prompt/schema/code versions, frozen configuration, selection stratum and randomized study arm.
-- **Evidence/actions:** ordered action events, public explanations, initial/wider evidence IDs, requested/actual crop coordinates, image hashes, provider request IDs, validation failures and terminal outcome.
+- **Evidence/actions:** ordered action events, Jev's three probabilities and top choice, the application's rule outcome, initial/wider evidence IDs, requested/actual crop coordinates, image hashes, provider request IDs, validation failures and terminal outcome.
 - **Human review:** reviewer pseudonym, blinded reference label, timed-review decision, advice exposure, final adjudication if needed, and append-only decision revisions. Keep `unsure` distinct from `rejected`.
 - **Timing:** queue, provider, crop, total agent and human active/wall times; log focus/pause events and revisions.
-- **Costs:** reported token/image usage, reserved maximum, estimated and reconciled cost, rate-card version, failures and unknown charges. Missing usage means unknown, not zero. Record Roboflow tile usage separately from incremental agent expense.
+- **Costs:** Jev inference latency, model-reported input/image token metrics when available, estimated active GPU cost from a recorded hourly rate, and unmeasured costs. Keep the provider's actual running/idle bill distinct from the app estimate. Record Roboflow tile usage separately.
 
-Reserve a conservative maximum charge before dispatching each model call; reconcile reported usage afterward. Keep uncertain reservations consumed until reconciled. If the configured provider cannot support a defensible upper bound, do not enable the paid experiment. Preserve the existing Roboflow daily tile limit.
+Reserve a daily call slot before each model call. This prevents duplicate or interrupted runs from silently spending additional inference time. The separate GPU endpoint must be paused or scaled down by its operator to stop hosting charges. Preserve the existing Roboflow daily tile limit.
 
-Extend exports to `mars-fan-scout-review-v3` with separate `agent_review` and `human_review` fields while retaining existing image/model/candidate fields. Include exact evidence bytes in a downloadable bundle with a manifest; JSON-only export contains their hashes and authenticated references. The existing ordinary browser-local workflow remains available; experiment reviews use isolated storage and server acknowledgments.
+Exports use `mars-fan-scout-review-v4` with separate agent run results and human reviews while retaining image/model/candidate fields. Include exact evidence bytes in a downloadable bundle with a manifest; JSON-only export contains their hashes and authenticated references. The existing ordinary browser-local workflow remains available; experiment reviews use isolated storage and server acknowledgments.
 
 ## 5. Add the experiment UI
 
@@ -121,7 +122,7 @@ The agent never accepts candidates, selects source ends, changes wind summaries,
 
 A human curator inspects this set without agent output to confirm it includes clear fan-like deposits, obvious false positives, and ambiguous shapes. If a category is absent, supplement from separate development crops before freezing and record the rule. Old unmatched point-proximity predictions are not automatically false positives. Report the final stratum counts and selection process. The existing images have already been inspected, so describe this as a reused, frozen pilot set rather than a new untouched test set.
 
-**Development.** Exercise the prompt, crop geometry, and model on separate candidates from the bundled development observation. Then freeze model, prompt, budgets, timeouts, inclusion rules, timing protocol, and metrics. Do not tune them in response to the pilot results. A revised prompt requires a separately labeled run and preferably new evaluation imagery.
+**Development.** Exercise the fixed question and options, crop geometry, and model on separate candidates from the bundled development observation. Then freeze model, question, call limits, timeouts, inclusion rules, timing protocol, and metrics. Do not tune them in response to the pilot results. A revised question or threshold requires a separately labeled run and preferably new evaluation imagery.
 
 **Human protocol.** Use two people where possible:
 
@@ -140,8 +141,8 @@ Precomputing advice isolates human inspection time. Report agent latency and tot
 | Would its proposed rejections lose human-accepted fans? | Number of `propose_reject` candidates labeled accepted in blinded/adjudicated review, divided by all human-accepted candidates; also show this count among proposed rejections. |
 | How useful are the rejection proposals? | Human-rejected proposals / all proposals; show accepted and unsure outcomes separately. |
 | How often does it help or abstain? | Proposal, wider-view, deferral, failure and context-unavailable rates over all enrolled candidates. |
-| Did more context help? | Show every wider-view trajectory, its stated initial ambiguity and final recommendation, and agreement with blinded review. This is descriptive, not a causal ablation. |
-| What does it cost? | Total and per-candidate VLM cost, cost per human-confirmed rejection, provider/crop/queue latency and unknown-usage count. Historical detector expense is separate. |
+| Did more context help? | Show every wider-view trajectory, initial scores and rule result, final recommendation, and agreement with blinded review. This is descriptive, not a causal ablation. |
+| What does it cost? | Estimated active GPU compute, separately recorded actual endpoint bill when available, cost per human-confirmed rejection, provider/crop/queue latency and unknown-usage count. Historical detector expense is separate. |
 | Did advice change human judgments? | Timed-review disagreement with blinded/adjudicated labels in each arm, retaining unsure cases. |
 
 No candidate disappears from the actual human queue; the missed-fan metric measures hypothetical loss if advice were automated. This experiment does not measure detector recall for fans that never became candidates. The small curated set cannot establish population safety or a statistically reliable time saving. Zero observed missed fans means zero in this sample only.
@@ -150,11 +151,11 @@ Predeclare an encouraging pilot as lower human review time with no observed huma
 
 ## 7. Build order and acceptance checks
 
-1. **Freeze protocol and schema.** Add the manifest builder, record schema, action contract and configuration. Confirm Sprite Node compatibility, image library installation, and the chosen provider with development evidence.
+1. **Freeze protocol and schema.** Add the manifest builder, record schema, decision rule and configuration. Confirm Sprite Node compatibility, image library installation, and Jev with development evidence.
 2. **Build persistence and evidence.** Implement session upload, hashes, stable IDs, crop generation, access checks, audit journal and export. Reconstruct a stored crop exactly from its manifest.
-3. **Build the bounded runner.** Start with a fake provider covering each action and failure path; then make one real development run. Add idempotency, persistent budget reservations and restart recovery before batch execution.
+3. **Build the bounded runner.** Start with a fake Jev service covering each action and failure path; then make one real development run. Add idempotency, persistent call reservations and restart recovery before batch execution.
 4. **Integrate the UI and human records.** Add the advisory panel, complete experiment queue, timing and study-arm behavior. Verify that all decisions and directions still require a human.
-5. **Deploy the disabled feature to the existing Sprite.** Update `README.md`, `DEPLOY_SPRITES.md`, `.env.example`, and `.gitignore`; install pinned dependencies and smoke-test through the existing domain. Set provider credentials and positive budgets server-side, then enable the experiment for the meeting code. A feature flag disables further agent runs while preserving human review and saved records.
+5. **Deploy the disabled feature to the existing Sprite.** Update `README.md`, `DEPLOY_SPRITES.md`, `.env.example`, and `.gitignore`; install pinned dependencies and smoke-test through the existing domain. Connect the private GPU endpoint and set a positive call limit server-side, then enable the experiment for the meeting code. A feature flag disables further agent runs while preserving human review and saved records. The demo limit can be small; the full 44-candidate pilot needs up to 88 Jev calls.
 6. **Run and report.** Execute the frozen set, finish all human reviews, export evidence/traces, and produce `evaluation/agent-review/report.md` plus machine-readable metrics. Include a useful rejection, a wider-view case if one occurred, and failures/disagreements. A scripted branch demonstration must be labeled as such; never invent a live wider-view decision.
 
 Focused automated checks: crop coordinates at image edges and scale changes; invalid/out-of-bounds masks; wider view crossing detector-tile boundaries; stable IDs across sorting/rescans; exactly one crop/two calls maximum; malformed responses/refusals/timeouts; no budget overspend under duplicate/concurrent requests; persistence after restart; unknown billing outcomes; baseline advice withheld; server review acknowledgment; agent inability to mutate human/direction fields; and complete evidence export. Run the existing direction and demo-access tests as regression checks.
