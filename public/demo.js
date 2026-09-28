@@ -274,8 +274,11 @@ async function pollSession(id, generation) {
 }
 async function runAgent(generation) {
   if (generation !== state.generation || !state.session) return;
-  await api(`/api/scout/review-sessions/${state.session.id}/runs`, { method: "POST", headers: { "content-type": "application/json" },
+  const run = await api(`/api/scout/review-sessions/${state.session.id}/runs`, { method: "POST", headers: { "content-type": "application/json" },
     body: JSON.stringify({ candidate_ids: state.session.candidates.slice(0, 3).map(item => item.id), idempotency_key: crypto.randomUUID() }) });
+  // Keep one request open while Sprite finishes the GPU checks. The ordinary status
+  // poll still gives the viewer progressive results and survives a dropped wait.
+  void api(`/api/scout/review-sessions/${state.session.id}/runs/${run.id}?wait=1`).catch(() => {});
   await pollSession(state.session.id, generation);
 }
 async function startRun() {

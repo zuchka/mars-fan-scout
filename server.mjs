@@ -236,6 +236,12 @@ const server = createServer(async (request, response) => {
       const runMatch = tail.match(/^runs\/([a-f0-9-]{36})$/);
       if (request.method === "GET" && runMatch) {
         const run = session.runs[runMatch[1]];
+        if (run && url.searchParams.get("wait") === "1") {
+          const deadline = Date.now() + 55000;
+          while (["queued", "running"].includes(run.status) && Date.now() < deadline && !response.destroyed) {
+            await new Promise(resolve => setTimeout(resolve, 250));
+          }
+        }
         return run ? send(response, 200, reviewRunner.publicRun(session, run)) : send(response, 404, { error: "Unknown agent run" });
       }
       if (request.method === "POST" && tail === "reviews") {
