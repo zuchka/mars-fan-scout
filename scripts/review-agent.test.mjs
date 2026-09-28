@@ -16,13 +16,13 @@ const fixture = JSON.parse(await readFile(resolve(root, "evaluation/agent-review
 const image = await readFile(resolve(root, fixture.image));
 const candidate = fixture.candidates[0];
 
-async function setup(t, arm = "assisted") {
+async function setup(t, arm = "assisted", { demo = false, count = 1 } = {}) {
   const dir = await mkdtemp(resolve(tmpdir(), "mars-agent-test-"));
   t.after(() => rm(dir, { recursive: true, force: true }));
   const store = new ReviewStore(resolve(dir, "sessions"));
   await store.init();
-  const session = await store.create({ image_base64: image.toString("base64"), detector_model: "frozen-test",
-    candidates: [{ ...candidate, arm }] });
+  const session = await store.create({ demo, image_base64: image.toString("base64"), detector_model: "frozen-test",
+    candidates: fixture.candidates.slice(0, count).map(item => ({ ...item, arm })) });
   const budget = new ReviewBudget(resolve(dir, "budget.json"), { dailyCallLimit: 4, reservationUsd: 0 });
   return { dir, store, session, budget };
 }
@@ -117,7 +117,7 @@ test("Jev provider sends one marked image and verifies the pinned model identity
       request_id: "test-response", prediction: "Fan", probabilities: { Fan: .9, "Not a fan": .05, Unsure: .05 },
       metrics: { generated_tokens: 0 } }) };
   } });
-  const result = await provider({ candidate, evidence, wider: false });
+  const result = await provider({ candidate, evidence, wider: false, timeout_ms: 1234.5 });
   assert.equal(result.prediction, "Fan");
   assert.equal(request.options.length, 3);
   assert.deepEqual(Buffer.from(request.image_base64, "base64"), evidence.overlay);
@@ -134,10 +134,55 @@ test("hosted Jev calls wait for a scaled-to-zero endpoint", async () => {
         backend: "cuda-bf16", prediction: "Unsure", probabilities: { Fan: .1, "Not a fan": .1, Unsure: .8 } }) };
     },
   });
-  const result = await provider({ evidence: { overlay: Buffer.from("test") }, timeout_ms: 1234.5 });
+  const result = await provider({ evidence: { overlay: Buffer.from("test") } });
   assert.equal(result.prediction, "Unsure");
   assert.equal(headers["x-scale-up-timeout"], "600");
   assert.equal(headers.authorization, "Bearer test-token");
+});
+
+test("hosted endpoint failure is identified so the demo can stop promptly", async () => {
+  const provider = makeJevProvider({
+    url: "https://example.endpoints.huggingface.cloud", token: "test-token",
+    fetchImpl: async () => ({ ok: false, status: 400, json: async () => ({
+      error: "Bad Request: Your endpoint is in error, check its status on endpoints.huggingface.co", code: "BAD_REQUEST",
+    }) }),
+  });
+  await assert.rejects(provider({ evidence: { overlay: Buffer.from("test") }, timeout_ms: 45000 }),
+    error => error.endpointUnavailable === true && /HTTP 400/.test(error.message));
+});
+
+test("demo checks candidates concurrently and preserves terminal results", async t => {
+  const { dir, store, session, budget } = await setup(t, "assisted", { demo: true, count: 3 });
+  let active = 0, peak = 0, calls = 0;
+  const provider = async () => {
+    calls++; active++; peak = Math.max(peak, active);
+    await new Promise(resolve => setTimeout(resolve, 30));
+    active--;
+    return { prediction: "Fan", probabilities: { Fan: .94, "Not a fan": .03, Unsure: .03 }, cost_usd: null };
+  };
+  const runner = new ReviewRunner({ store, budget, provider });
+  const run = await runner.enqueue(session, session.candidates.map(item => item.id), "demoparallel123");
+  await waitRun(run, runner);
+  assert.equal(calls, 3);
+  assert.ok(peak > 1);
+  assert.equal(Object.keys(run.results).length, 3);
+  assert.ok(Object.values(run.results).every(result => result.status === "complete"));
+  const saved = JSON.parse(await readFile(resolve(dir, "sessions", session.id, "session.json"), "utf8"));
+  assert.equal(saved.runs[run.id].status, "complete");
+  assert.equal(Object.keys(saved.runs[run.id].results).length, 3);
+});
+
+test("unavailable endpoint stops a research run after the first call", async t => {
+  const { store, session, budget } = await setup(t, "assisted", { count: 3 });
+  let calls = 0;
+  const provider = async () => { calls++; const error = new Error("Jev service HTTP 400"); error.endpointUnavailable = true; throw error; };
+  const runner = new ReviewRunner({ store, budget, provider });
+  const run = await runner.enqueue(session, session.candidates.map(item => item.id), "unavailable123");
+  await waitRun(run, runner);
+  assert.equal(calls, 1);
+  assert.equal(Object.keys(run.results).length, 3);
+  assert.ok(Object.values(run.results).every(result => result.status === "unavailable"));
+  assert.match(run.provider_unavailable, /GPU endpoint is unavailable/);
 });
 
 test("Jev scores produce three explicit verdicts and conservative wider-view requests", () => {

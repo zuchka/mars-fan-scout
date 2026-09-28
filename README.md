@@ -2,6 +2,8 @@
 
 A live Mars visual-intelligence demo. Open the home page, enter the meeting code, and the bundled HiRISE crop runs automatically: Roboflow marks possible fans; Jev-Omni checks three marked shapes and may request a wider view before answering **Fan / Not a fan / Unsure**. Select a result to see the pixels Jev saw. You can also upload a Mars crop, which starts the same flow automatically. The detailed human-review workspace is preserved at `/research.html`; the earlier catalog-guided Mars Weather Report remains at `/archive.html`.
 
+The classifier is the independent open-weight [Jev-Omni](https://huggingface.co/akhilaaa3/Jev-Omni), not TypeSafe AI's separate Jev product. The lemon-line demo ran Jev-Omni locally on an M4 Max with MLX; this live Sprite calls a private Hugging Face GPU endpoint. Hugging Face is hosting, not a required part of the model. The hosted path can be slower and can fail when a scaled-to-zero GPU cannot restart.
+
 **Live demo:** [mars.zuchka.dev](https://mars.zuchka.dev/). Cloudflare serves the custom domain through a Worker that forwards requests to the [Fly Sprite](https://mcp-mars-fan-scout-b3l3w.sprites.app/). Image browsing is public; the private meeting code unlocks live Roboflow and Jev calls. The deployment limits daily scan and Jev calls. A completed result resumes in the same browser instead of rerunning paid inference on every refresh. See [DEPLOY_SPRITES.md](DEPLOY_SPRITES.md) for operations.
 
 ## Bounded review-agent experiment

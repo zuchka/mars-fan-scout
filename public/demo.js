@@ -143,7 +143,7 @@ function drawMasks() {
 function latestRun() { return Object.values(state.session?.runs || {}).at(-1) || null; }
 function agentResult(id) { return latestRun()?.results?.[id] || null; }
 function verdictInfo(result) {
-  if (!result) return { label: "Jev is looking…", className: "" };
+  if (!result) return { label: "Jev-Omni is looking…", className: "" };
   if (result.status !== "complete") return { label: "Could not finish", className: "error" };
   if (result.verdict === "fan") return { label: "Fan", className: "fan" };
   if (result.verdict === "not_fan") return { label: "Not a fan", className: "not_fan" };
@@ -180,11 +180,11 @@ async function evidenceImage(sessionId, evidenceId) {
   return url;
 }
 function explanation(result) {
-  if (result.status !== "complete") return result.trace?.some(event => event.type === "wider_view_created") ? "Jev asked for a wider view, but the follow-up did not finish." : "Jev could not finish this check. The source pixels are still visible above.";
+  if (result.status !== "complete") return result.trace?.some(event => event.type === "wider_view_created") ? "Jev-Omni asked for a wider view, but the follow-up did not finish." : "Jev-Omni could not finish this check. The source pixels are still visible above.";
   const wider = result.trace?.some(event => event.type === "wider_view_created");
-  if (result.verdict === "fan") return `${wider ? "Jev asked to see more of the image, then checked again. " : ""}Its Fan answer cleared the confidence threshold.`;
-  if (result.verdict === "not_fan") return `${wider ? "Jev asked to see more of the image, then checked again. " : ""}Its Not a fan answer cleared the confidence threshold.`;
-  return wider ? "The first view was ambiguous. Jev requested a wider crop, checked again, and stayed unsure." : "The marked pixels did not support a confident Fan or Not a fan call.";
+  if (result.verdict === "fan") return `${wider ? "Jev-Omni asked to see more of the image, then checked again. " : ""}Its Fan answer cleared the confidence threshold.`;
+  if (result.verdict === "not_fan") return `${wider ? "Jev-Omni asked to see more of the image, then checked again. " : ""}Its Not a fan answer cleared the confidence threshold.`;
+  return wider ? "The first view was ambiguous. Jev-Omni requested a wider crop, checked again, and stayed unsure." : "The marked pixels did not support a confident Fan or Not a fan call.";
 }
 async function showDetail() {
   const candidate = state.candidates.find(item => item.id === state.selectedId);
@@ -194,7 +194,7 @@ async function showDetail() {
   $("candidate-detail").hidden = false;
   $("detail-name").textContent = `SHAPE ${String(index).padStart(2, "0")}`;
   $("detail-verdict").textContent = verdictInfo(result).label;
-  $("detail-explanation").textContent = result ? explanation(result) : "Jev is inspecting this marked shape. The answer will appear here automatically.";
+  $("detail-explanation").textContent = result ? explanation(result) : "Jev-Omni is inspecting this marked shape. The answer will appear here automatically.";
   $("detail-timing").textContent = result?.status === "complete" ? `${result.trace?.filter(event => event.type === "provider_call_completed").length || 1} visual look${result.trace?.filter(event => event.type === "provider_call_completed").length === 1 ? "" : "s"} · ${(result.elapsed_ms / 1000).toFixed(1)}s` : "";
   $("evidence-grid").hidden = true;
   $("wider-figure").hidden = true;
@@ -219,19 +219,24 @@ function renderSession() {
   const run = latestRun();
   const completed = run ? Object.keys(run.results || {}).length : 0;
   const widerCount = Object.values(run?.results || {}).filter(result => result.trace?.some(event => event.type === "wider_view_created")).length;
-  $("roboflow-line").textContent = `Marked ${state.candidates.length} shape${state.candidates.length === 1 ? "" : "s"} for Jev to inspect.`;
+  $("roboflow-line").textContent = `Marked ${state.candidates.length} shape${state.candidates.length === 1 ? "" : "s"} for Jev-Omni to inspect.`;
   $("jev-line").textContent = run?.status === "complete" ? `Finished ${state.candidates.length} visual check${state.candidates.length === 1 ? "" : "s"}${widerCount ? `; requested a wider view ${widerCount} time${widerCount === 1 ? "" : "s"}` : ""}.` : `Checking marked shapes… ${completed} of ${state.candidates.length} done.`;
   if (run?.status === "interrupted") {
-    error("Jev was interrupted while checking this image. Run the demo again to retry.");
+    error("Jev-Omni was interrupted while checking this image. Run the demo again to retry.");
   } else if (run?.status === "complete") {
     const counts = { fan: 0, not_fan: 0, unsure: 0, unfinished: 0 };
     for (const result of Object.values(run.results || {})) counts[result.status === "complete" ? result.verdict : "unfinished"]++;
-    $("answer-line").textContent = `${counts.fan} fan · ${counts.not_fan} not a fan · ${counts.unsure} unsure${counts.unfinished ? ` · ${counts.unfinished} could not finish` : ""}. Select a shape to see what Jev saw.`;
-    $("footer-status").textContent = "Live Roboflow and Jev check complete.";
+    $("answer-line").textContent = `${counts.fan} fan · ${counts.not_fan} not a fan · ${counts.unsure} unsure${counts.unfinished ? ` · ${counts.unfinished} could not finish` : ""}. Select a shape to see what Jev-Omni saw.`;
     $("run-again").hidden = false;
     $("image-input").disabled = false;
     state.busy = false;
-    phase("done");
+    if (counts.unfinished === state.candidates.length) {
+      error(run.provider_unavailable || "Jev-Omni could not complete the visual checks. The GPU endpoint may be unavailable.");
+      $("footer-status").textContent = "Roboflow found the shapes; Jev-Omni is unavailable right now.";
+    } else {
+      $("footer-status").textContent = "Live Roboflow and Jev-Omni check complete.";
+      phase("done");
+    }
   } else {
     $("footer-status").textContent = "The results will fill in automatically.";
     phase("jev");
@@ -246,7 +251,7 @@ async function pollSession(id, generation) {
     if (generation !== state.generation) return;
     renderSession();
     if (!["complete", "interrupted"].includes(latestRun()?.status)) state.pollTimer = setTimeout(() => pollSession(id, generation), 1800);
-  } catch (cause) { if (generation === state.generation) error(`Jev status could not be loaded: ${cause.message}`); }
+  } catch (cause) { if (generation === state.generation) error(`Jev-Omni status could not be loaded: ${cause.message}`); }
 }
 async function runAgent(generation) {
   if (generation !== state.generation || !state.session) return;
@@ -282,20 +287,20 @@ async function startRun() {
     const chosen = showcaseCandidates(found);
     if (!chosen.length) {
       $("roboflow-line").textContent = "No possible fans appeared in this crop.";
-      $("jev-line").textContent = "Nothing was sent to Jev.";
+      $("jev-line").textContent = "Nothing was sent to Jev-Omni.";
       $("answer-line").textContent = "Try another Mars crop.";
       $("footer-status").textContent = "No candidates in this image.";
       $("run-again").hidden = false;
       $("image-input").disabled = false;
       state.busy = false; phase("done"); return;
     }
-    $("roboflow-line").textContent = `Found ${found.length} possible shape${found.length === 1 ? "" : "s"}; sending ${chosen.length} across the confidence range to Jev.`;
-    $("jev-line").textContent = "Jev is looking at the marked crop pixels…";
-    $("footer-status").textContent = "Jev may ask for more of the image before it answers.";
+    $("roboflow-line").textContent = `Found ${found.length} possible shape${found.length === 1 ? "" : "s"}; sending ${chosen.length} across the confidence range to Jev-Omni.`;
+    $("jev-line").textContent = "Jev-Omni is looking at the marked crop pixels…";
+    $("footer-status").textContent = "Jev-Omni may ask for more of the image before it answers.";
     phase("jev");
     const imageBase64 = state.canvas.toDataURL("image/png").split(",")[1];
     state.session = await api("/api/scout/review-sessions", { method: "POST", headers: { "content-type": "application/json" },
-      body: JSON.stringify({ image_base64: imageBase64, name: state.file.name, observation: state.sample ? SAMPLE.observation : null,
+      body: JSON.stringify({ demo: true, image_base64: imageBase64, name: state.file.name, observation: state.sample ? SAMPLE.observation : null,
         detector_model: state.modelId, detector_responses: [{ tile: { x: 0, y: 0, width: state.canvas.width, height: state.canvas.height }, response: data }],
         candidates: chosen.map((item, index) => ({ label: `RF-${String(index + 1).padStart(3, "0")}`, polygon: item.polygon, confidence: item.confidence, arm: "assisted" })) }) });
     saveSessionId(state.session.id);
@@ -331,7 +336,7 @@ async function checkAccess() {
   if (!state.access) { $("access-panel").hidden = false; phase("locked"); return false; }
   $("access-panel").hidden = true;
   if (!statusData.scout_ready) throw new Error("Roboflow is not connected on this Sprite yet.");
-  if (!state.agentReady) throw new Error("Jev is not connected on this Sprite yet.");
+  if (!state.agentReady) throw new Error("Jev-Omni is not connected on this Sprite yet.");
   status("Ready to run", "ready");
   return true;
 }

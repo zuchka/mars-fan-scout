@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, readdir, readFile, rename, writeFile, open } from "node:fs/promises";
+import { mkdir, readdir, readFile, rename, writeFile, open, appendFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { imageInfo, sha256, validateCandidate } from "./evidence.mjs";
 
@@ -36,6 +36,11 @@ export class ReviewStore {
   }
   async event(session, type, detail) {
     const row = { at: new Date().toISOString(), type, ...detail };
+    if (session.demo) {
+      await appendFile(this.path(session.id, "events.jsonl"), JSON.stringify(row) + "\n", { mode: 0o600 });
+      if (["session_created", "run_queued", "candidate_terminal", "run_complete", "human_review"].includes(type)) await this.save(session);
+      return row;
+    }
     const file = await open(this.path(session.id, "events.jsonl"), "a", 0o600);
     try { await file.appendFile(JSON.stringify(row) + "\n"); await file.sync(); }
     finally { await file.close(); }
@@ -43,7 +48,7 @@ export class ReviewStore {
     return row;
   }
   async create(body) {
-    if (!body || typeof body.image_base64 !== "string" || body.image_base64.length > 56 * 1024 * 1024 || !Array.isArray(body.candidates) || body.candidates.length < 1 || body.candidates.length > 250) throw new Error("Invalid review session");
+    if (!body || typeof body.image_base64 !== "string" || body.image_base64.length > 56 * 1024 * 1024 || !Array.isArray(body.candidates) || body.candidates.length < 1 || body.candidates.length > (body.demo === true ? 3 : 250)) throw new Error("Invalid review session");
     if (!/^[A-Za-z0-9+/]+={0,2}$/.test(body.image_base64)) throw new Error("Invalid image encoding");
     const image = Buffer.from(body.image_base64, "base64");
     const info = await imageInfo(image);
@@ -64,7 +69,7 @@ export class ReviewStore {
     if (Buffer.byteLength(rawDetector) > 10 * 1024 * 1024) throw new Error("Detector snapshot exceeds 10 MB");
     const id = randomUUID();
     const snapshot_sha256 = sha256(JSON.stringify(candidates));
-    const session = { format: "mars-fan-scout-review-v4", id, created_at: new Date().toISOString(),
+    const session = { format: "mars-fan-scout-review-v4", id, created_at: new Date().toISOString(), demo: body.demo === true,
       image: { ...info, original_sha256: clean(body.original_sha256), name: clean(body.name), observation: clean(body.observation) },
       snapshot_sha256, detector_model: clean(body.detector_model), detector_responses_sha256: sha256(rawDetector),
       fixture_id: clean(body.fixture_id), candidates, runs: {}, reviews: {}, evidence: {}, idempotency: {} };

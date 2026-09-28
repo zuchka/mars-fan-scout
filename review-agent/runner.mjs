@@ -40,12 +40,19 @@ export class ReviewRunner {
         const { session, run } = this.queue.shift();
         run.status = "running"; run.started_at = now();
         await this.store.event(session, "run_started", { run_id: run.id });
-        for (const id of run.candidates) {
+        const review = async id => {
+          if (run.provider_unavailable) {
+            run.results[id] = this.fallback([], performance.now(), run.provider_unavailable, "unavailable");
+            await this.store.event(session, "candidate_terminal", { run_id: run.id, candidate_id: id, result: run.results[id] });
+            return;
+          }
           const candidate = session.candidates.find(item => item.id === id);
           try { run.results[id] = await this.reviewCandidate(session, run, candidate); }
           catch (error) { run.results[id] = { action: "send_to_human", verdict: "unsure", explanation: "Jev error: " + String(error.message).slice(0, 180), explanation_source: "application_rule", status: "error", trace: [], human_review_required: true }; }
           await this.store.event(session, "candidate_terminal", { run_id: run.id, candidate_id: id, result: run.results[id] });
-        }
+        };
+        if (session.demo) await Promise.all(run.candidates.map(review));
+        else for (const id of run.candidates) await review(id);
         run.status = "complete"; run.finished_at = now();
         await this.store.event(session, "run_complete", { run_id: run.id });
       }
@@ -61,7 +68,7 @@ export class ReviewRunner {
     trace.push({ type: "evidence_created", evidence_id: initial.id, meta: first.meta, at: now() });
     await this.store.event(session, "evidence_created", { run_id: run.id, candidate_id: candidate.id, evidence_id: initial.id, meta: first.meta });
     const firstCall = await this.call(session, run, candidate, first, false, null, trace, started);
-    if (!firstCall) return this.fallback(trace, started, "Provider unavailable or budget exhausted");
+    if (!firstCall) return this.fallback(trace, started, run.provider_unavailable || "Provider unavailable or budget exhausted", run.provider_unavailable ? "unavailable" : "fallback");
     if (firstCall.action.action !== "request_wider_view") return this.terminal(firstCall.action, trace, started);
     const wider = await makeEvidence(image, session.image, candidate, "wider");
     if (!wider) return this.fallback(trace, started, "Wider context unavailable at image boundary", "context_unavailable");
@@ -70,18 +77,22 @@ export class ReviewRunner {
     trace.push({ type: "wider_view_created", evidence_id: wide.id, meta: wider.meta, at: now() });
     await this.store.event(session, "wider_view_created", { run_id: run.id, candidate_id: candidate.id, evidence_id: wide.id, meta: wider.meta });
     const second = await this.call(session, run, candidate, wider, true, firstCall.action, trace, started);
-    if (!second) return this.fallback(trace, started, "Follow-up unavailable or budget exhausted");
+    if (!second) return this.fallback(trace, started, run.provider_unavailable || "Follow-up unavailable or budget exhausted", run.provider_unavailable ? "unavailable" : "fallback");
     return this.terminal(second.action, trace, started);
   }
   async call(session, run, candidate, evidence, wider, firstAction, trace, started) {
+    if (run.provider_unavailable) return null;
     const remaining = 720000 - (performance.now() - started);
     if (remaining <= 0) return null;
     const requestId = randomUUID();
-    if (!this.budget.reserve(requestId, `${run.id}:${candidate.id}`)) return null;
+    if (!this.budget.reserve(requestId, `${run.id}:${candidate.id}`)) {
+      run.provider_unavailable = "Jev's daily call allowance is exhausted";
+      return null;
+    }
     trace.push({ type: "provider_call_started", request_id: requestId, wider, reserved_usd: this.budget.reservationUsd, at: now() });
     await this.store.event(session, "provider_call_started", { run_id: run.id, candidate_id: candidate.id, request_id: requestId, wider, reserved_usd: this.budget.reservationUsd });
     try {
-      const result = await this.provider({ candidate, evidence, wider, firstAction, timeout_ms: remaining });
+      const result = await this.provider({ candidate, evidence, wider, firstAction, timeout_ms: Math.min(remaining, session.demo ? 45000 : remaining) });
       const action = reviewDecision(result, { wider, ...run.policy });
       this.budget.reconcile(requestId, result.cost_usd);
       const event = { type: "provider_call_completed", request_id: requestId, wider, action, response_id: result.response_id || null,
@@ -92,6 +103,7 @@ export class ReviewRunner {
       await this.store.event(session, "provider_call_completed", { run_id: run.id, candidate_id: candidate.id, ...event });
       return { action };
     } catch (error) {
+      if (error.endpointUnavailable || ["TimeoutError", "AbortError"].includes(error.name)) run.provider_unavailable = "Jev's GPU endpoint is unavailable";
       const event = { type: "provider_call_failed", request_id: requestId, wider, error: String(error.message).slice(0, 180), cost_usd: null, at: now() };
       trace.push(event);
       await this.store.event(session, "provider_call_failed", { run_id: run.id, candidate_id: candidate.id, ...event });

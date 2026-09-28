@@ -93,7 +93,7 @@ async function readLargeJson(request, max = 70 * 1024 * 1024) {
 
 function publicReviewSession(session) {
   const complete = session.candidates.every(candidate => Object.values(session.reviews).some(review => review.candidate_id === candidate.id && review.stage === "timed"));
-  return { format: session.format, id: session.id, created_at: session.created_at, image: session.image, fixture_id: session.fixture_id,
+  return { format: session.format, id: session.id, created_at: session.created_at, demo: session.demo === true, image: session.image, fixture_id: session.fixture_id,
     snapshot_sha256: session.snapshot_sha256, detector_model: session.detector_model, detector_responses_sha256: session.detector_responses_sha256, candidates: session.candidates,
     runs: Object.fromEntries(Object.entries(session.runs).map(([id, run]) => [id, reviewRunner.publicRun(session, run)])),
     reviews: Object.values(session.reviews).map(review => complete || review.stage === "timed" ? review :

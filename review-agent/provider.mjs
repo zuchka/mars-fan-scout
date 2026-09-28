@@ -46,14 +46,22 @@ export function makeJevProvider({ url, token = "", imageTokens = null, expectedR
     compute_usd_per_hour: hourly, cost_basis: hourly === null ? "Compute cost unmeasured; no OpenAI API charge" : "Request wall time times instance rate; not the provider bill" };
   const provider = async ({ evidence, timeout_ms = maxCallMs }) => {
     const started = performance.now();
+    const limitMs = Math.max(1, Math.floor(Math.min(maxCallMs, timeout_ms)));
     const response = await fetchImpl(`${origin}/classify`, {
       method: "POST", headers: { ...headers, "content-type": "application/json",
-        ...(hostedEndpoint ? { "x-scale-up-timeout": "600" } : {}) },
+        ...(hostedEndpoint ? { "x-scale-up-timeout": String(Math.min(600, Math.max(1, Math.floor(limitMs / 1000)))) } : {}) },
       body: JSON.stringify({ image_base64: evidence.overlay.toString("base64"), state: STATE,
         question: QUESTION, options: OPTIONS, image_tokens: imageTokens === null ? null : Number(imageTokens) }),
-      signal: AbortSignal.timeout(Math.max(1, Math.floor(Math.min(maxCallMs, timeout_ms)))),
+      signal: AbortSignal.timeout(limitMs),
     });
-    if (!response.ok) throw new Error(`Jev service HTTP ${response.status}`);
+    if (!response.ok) {
+      let body = null;
+      try { body = await response.json(); } catch { /* The HTTP status still identifies the failure. */ }
+      const error = new Error(`Jev service HTTP ${response.status}`);
+      error.endpointUnavailable = [429, 502, 503, 504].includes(response.status) ||
+        (response.status === 400 && body?.code === "BAD_REQUEST" && /endpoint is in error/i.test(body?.error || ""));
+      throw error;
+    }
     const body = await response.json();
     if (body.model_repo !== MODEL_REPO || body.model_revision !== expectedRevision || body.backend !== expectedBackend) throw new Error("Jev checkpoint mismatch");
     const prediction = validatePrediction(body);
