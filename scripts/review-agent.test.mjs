@@ -140,6 +140,21 @@ test("hosted Jev calls wait for a scaled-to-zero endpoint", async () => {
   assert.equal(headers.authorization, "Bearer test-token");
 });
 
+test("hosted warm-up overlaps requests and only wakes the GPU once", async () => {
+  let requests = 0;
+  const provider = makeJevProvider({ url: "https://example.endpoints.huggingface.cloud", token: "test-token",
+    fetchImpl: async (url, options) => {
+      assert.match(url, /\/health$/);
+      assert.equal(options.headers["x-scale-up-timeout"], "80");
+      requests++;
+      await new Promise(resolve => setTimeout(resolve, 5));
+      return { ok: true, json: async () => ({ ready: true, model_repo: MODEL_REPO, model_revision: MODEL_REVISION, backend: "cuda-bf16" }) };
+    } });
+  await Promise.all([provider.warm(), provider.warm()]);
+  await provider.warm();
+  assert.equal(requests, 1);
+});
+
 test("hosted endpoint failure is identified so the demo can stop promptly", async () => {
   const provider = makeJevProvider({
     url: "https://example.endpoints.huggingface.cloud", token: "test-token",

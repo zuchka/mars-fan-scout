@@ -1,0 +1,174 @@
+{
+  "format": "mars-fan-annotation-queue-v1",
+  "rule_file": "evaluation/demo-repair/ANNOTATION_GUIDE.md",
+  "chips": [
+    {
+      "observation": "ESP_011296_0975",
+      "image": "ESP_011296_0975_APF00006n1.jpg",
+      "weak_mask_count": 19,
+      "status": "needs_complete_human_annotation",
+      "local_image": "training/refined-coco/train/ESP_011296_0975_APF00006n1.jpg"
+    },
+    {
+      "observation": "ESP_011296_0975",
+      "image": "ESP_011296_0975_APF00006nz.jpg",
+      "weak_mask_count": 22,
+      "status": "needs_complete_human_annotation",
+      "local_image": "training/refined-coco/train/ESP_011296_0975_APF00006nz.jpg"
+    },
+    {
+      "observation": "ESP_011296_0975",
+      "image": "ESP_011296_0975_APF00006mg.jpg",
+      "weak_mask_count": 26,
+      "status": "needs_complete_human_annotation",
+      "local_image": "training/refined-coco/train/ESP_011296_0975_APF00006mg.jpg"
+    },
+    {
+      "observation": "ESP_011296_0975",
+      "image": "ESP_011296_0975_APF00006od.jpg",
+      "weak_mask_count": 29,
+      "status": "needs_complete_human_annotation",
+      "local_image": "training/refined-coco/train/ESP_011296_0975_APF00006od.jpg"
+    },
+    {
+      "observation": "ESP_011296_0975",
+      "image": "ESP_011296_0975_APF00006mf.jpg",
+      "weak_mask_count": 31,
+      "status": "needs_complete_human_annotation",
+      "local_image": "training/refined-coco/train/ESP_011296_0975_APF00006mf.jpg"
+    },
+    {
+      "observation": "ESP_011296_0975",
+      "image": "ESP_011296_0975_APF00006oo.jpg",
+      "weak_mask_count": 38,
+      "status": "needs_complete_human_annotation",
+      "local_image": "training/refined-coco/train/ESP_011296_0975_APF00006oo.jpg"
+    },
+    {
+      "observation": "ESP_011296_0975",
+      "image": "ESP_011296_0975_APF00006mt.jpg",
+      "weak_mask_count": 46,
+      "status": "needs_complete_human_annotation",
+      "local_image": "training/refined-coco/train/ESP_011296_0975_APF00006mt.jpg"
+    },
+    {
+      "observation": "ESP_011296_0975",
+      "image": "ESP_011296_0975_APF00006mr.jpg",
+      "weak_mask_count": 62,
+      "status": "needs_complete_human_annotation",
+      "local_image": "training/refined-coco/train/ESP_011296_0975_APF00006mr.jpg"
+    },
+    {
+      "observation": "ESP_011351_0945",
+      "image": "ESP_011351_0945_APF0000as7.jpg",
+      "weak_mask_count": 0,
+      "status": "needs_complete_human_annotation",
+      "local_image": "training/refined-coco/train/ESP_011351_0945_APF0000as7.jpg"
+    },
+    {
+      "observation": "ESP_011351_0945",
+      "image": "ESP_011351_0945_APF0000arx.jpg",
+      "weak_mask_count": 4,
+      "status": "needs_complete_human_annotation",
+      "local_image": "training/refined-coco/train/ESP_011351_0945_APF0000arx.jpg"
+    },
+    {
+      "observation": "ESP_011351_0945",
+      "image": "ESP_011351_0945_APF0000ask.jpg",
+      "weak_mask_count": 5,
+      "status": "needs_complete_human_annotation",
+      "local_image": "training/refined-coco/train/ESP_011351_0945_APF0000ask.jpg"
+    },
+    {
+      "observation": "ESP_011351_0945",
+      "image": "ESP_011351_0945_APF0000asb.jpg",
+      "weak_mask_count": 7,
+      "status": "needs_complete_human_annotation",
+      "local_image": "training/refined-coco/train/ESP_011351_0945_APF0000asb.jpg"
+    },
+    {
+      "observation": "ESP_011351_0945",
+      "image": "ESP_011351_0945_APF0000ar9.jpg",
+      "weak_mask_count": 10,
+      "status": "needs_complete_human_annotation",
+      "local_image": "training/refined-coco/train/ESP_011351_0945_APF0000ar9.jpg"
+    },
+    {
+      "observation": "ESP_011351_0945",
+      "image": "ESP_011351_0945_APF0000aqy.jpg",
+      "weak_mask_count": 16,
+      "status": "needs_complete_human_annotation",
+      "local_image": "training/refined-coco/train/ESP_011351_0945_APF0000aqy.jpg"
+    },
+    {
+      "observation": "ESP_011351_0945",
+      "image": "ESP_011351_0945_APF0000asj.jpg",
+      "weak_mask_count": 39,
+      "status": "needs_complete_human_annotation",
+      "local_image": "training/refined-coco/train/ESP_011351_0945_APF0000asj.jpg"
+    },
+    {
+      "observation": "ESP_011351_0945",
+      "image": "ESP_011351_0945_APF0000aqm.jpg",
+      "weak_mask_count": 87,
+      "status": "needs_complete_human_annotation",
+      "local_image": "training/refined-coco/train/ESP_011351_0945_APF0000aqm.jpg"
+    },
+    {
+      "observation": "ESP_011404_0945",
+      "image": "ESP_011404_0945_APF0000azd.jpg",
+      "weak_mask_count": 1,
+      "status": "needs_complete_human_annotation",
+      "local_image": "training/refined-coco/train/ESP_011404_0945_APF0000azd.jpg"
+    },
+    {
+      "observation": "ESP_011404_0945",
+      "image": "ESP_011404_0945_APF0000azv.jpg",
+      "weak_mask_count": 9,
+      "status": "needs_complete_human_annotation",
+      "local_image": "training/refined-coco/train/ESP_011404_0945_APF0000azv.jpg"
+    },
+    {
+      "observation": "ESP_011404_0945",
+      "image": "ESP_011404_0945_APF0000az9.jpg",
+      "weak_mask_count": 15,
+      "status": "needs_complete_human_annotation",
+      "local_image": "training/refined-coco/train/ESP_011404_0945_APF0000az9.jpg"
+    },
+    {
+      "observation": "ESP_011404_0945",
+      "image": "ESP_011404_0945_APF0000aya.jpg",
+      "weak_mask_count": 20,
+      "status": "needs_complete_human_annotation",
+      "local_image": "training/refined-coco/train/ESP_011404_0945_APF0000aya.jpg"
+    },
+    {
+      "observation": "ESP_011404_0945",
+      "image": "ESP_011404_0945_APF0000azi.jpg",
+      "weak_mask_count": 27,
+      "status": "needs_complete_human_annotation",
+      "local_image": "training/refined-coco/train/ESP_011404_0945_APF0000azi.jpg"
+    },
+    {
+      "observation": "ESP_011404_0945",
+      "image": "ESP_011404_0945_APF0000b00.jpg",
+      "weak_mask_count": 36,
+      "status": "needs_complete_human_annotation",
+      "local_image": "training/refined-coco/train/ESP_011404_0945_APF0000b00.jpg"
+    },
+    {
+      "observation": "ESP_011404_0945",
+      "image": "ESP_011404_0945_APF0000ayd.jpg",
+      "weak_mask_count": 46,
+      "status": "needs_complete_human_annotation",
+      "local_image": "training/refined-coco/train/ESP_011404_0945_APF0000ayd.jpg"
+    },
+    {
+      "observation": "ESP_011404_0945",
+      "image": "ESP_011404_0945_APF0000ayn.jpg",
+      "weak_mask_count": 87,
+      "status": "needs_complete_human_annotation",
+      "local_image": "training/refined-coco/train/ESP_011404_0945_APF0000ayn.jpg"
+    }
+  ]
+}

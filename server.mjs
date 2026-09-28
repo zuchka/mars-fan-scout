@@ -123,6 +123,7 @@ async function readImage(request, max = 3 * 1024 * 1024) {
 }
 
 async function inferImage(data) {
+  const started = performance.now();
   const [workspace, model] = modelId.split("/");
   const endpoint = new URL("https://serverless.roboflow.com/" + encodeURIComponent(workspace) + "/" + encodeURIComponent(model));
   endpoint.searchParams.set("api_key", apiKey);
@@ -140,7 +141,7 @@ async function inferImage(data) {
   }
   if (!response.ok) return { status:502, body:{ error:"Roboflow returned HTTP " + response.status + ". Check the model ID, training status, and API key." } };
   try {
-    return { status:200, body:await response.json() };
+    return { status:200, body:{ ...await response.json(), scout_timing: { roboflow_request_ms: Math.round(performance.now() - started) } } };
   } catch (_) {
     return { status:502, body:{ error:"Roboflow returned an unreadable response" } };
   }
@@ -169,6 +170,7 @@ const server = createServer(async (request, response) => {
     const url = new URL(request.url, "http://localhost");
     if (request.method === "GET" && url.pathname === "/api/status") {
       const granted = access.authorized(request.headers["x-demo-access-code"]);
+      if (granted && reviewProvider?.warm) void reviewProvider.warm().catch(error => console.error("Jev warm-up failed:", error.message));
       return send(response, 200, { ready, scout_ready:configured && !training && !replay, configured, training:training && !replay, mode:replay ? "recorded" : "live", model_id:modelIdValid ? modelId : null, access_required:access.accessRequired, access_granted:granted, daily_remaining:granted ? access.remaining() : null,
         review_agent: granted ? { ...reviewBudget.status(), enabled: reviewRunner.enabled,
           model: reviewProvider?.metadata?.model || reviewModel, backend: reviewProvider?.metadata?.backend || null } : { enabled: false } });

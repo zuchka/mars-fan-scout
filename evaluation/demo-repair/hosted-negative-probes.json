@@ -1,0 +1,59 @@
+{
+  "model": "akhilaaa3/Jev-Omni",
+  "results": [
+    {
+      "probe": "rock-shadow",
+      "http_status": 200,
+      "prediction": "Fan",
+      "probabilities": {
+        "Fan": 0.9005178213119507,
+        "Not a fan": 0.0911886915564537,
+        "Unsure": 0.008293482474982738
+      },
+      "metrics": {
+        "elapsed_ms": 111,
+        "generated_tokens": 0,
+        "image_token_budget": null,
+        "service_elapsed_ms": 112
+      },
+      "error": null,
+      "elapsed_ms": 475
+    },
+    {
+      "probe": "plain-terrain",
+      "http_status": 200,
+      "prediction": "Fan",
+      "probabilities": {
+        "Fan": 0.879938006401062,
+        "Not a fan": 0.1114354059100151,
+        "Unsure": 0.008626609109342098
+      },
+      "metrics": {
+        "elapsed_ms": 102,
+        "generated_tokens": 0,
+        "image_token_budget": null,
+        "service_elapsed_ms": 103
+      },
+      "error": null,
+      "elapsed_ms": 344
+    },
+    {
+      "probe": "textured-ridge",
+      "http_status": 200,
+      "prediction": "Fan",
+      "probabilities": {
+        "Fan": 0.8179405927658081,
+        "Not a fan": 0.1701154261827469,
+        "Unsure": 0.011943978257477283
+      },
+      "metrics": {
+        "elapsed_ms": 102,
+        "generated_tokens": 0,
+        "image_token_budget": null,
+        "service_elapsed_ms": 103
+      },
+      "error": null,
+      "elapsed_ms": 225
+    }
+  ]
+}

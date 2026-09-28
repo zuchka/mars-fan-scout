@@ -1,0 +1,97 @@
+{
+  "observation": "ESP_082142_0935",
+  "backend": "mlx-4bit",
+  "old_prompt": "mars-fan-jev-choice-1",
+  "new_prompt": "mars-fan-jev-choice-2-context",
+  "note": "Development comparison on the local MLX conversion; these are not CUDA endpoint results or human ground truth.",
+  "rows": [
+    {
+      "candidate_id": "29f85d5f6b8a7392fd42",
+      "confidence": 0.5571225881576538,
+      "old": {
+        "prediction": "Fan",
+        "probabilities": {
+          "Fan": 0.804608941078186,
+          "Not a fan": 0.17156241834163666,
+          "Unsure": 0.023828668519854546
+        },
+        "elapsed_ms": 26096
+      },
+      "new": [
+        {
+          "prediction": "Fan",
+          "probabilities": {
+            "Fan": 0.8574133515357971,
+            "Not a fan": 0.12246444821357727,
+            "Unsure": 0.020122217014431953
+          },
+          "wider": false,
+          "latency_ms": 6869
+        }
+      ],
+      "final_verdict": "fan"
+    },
+    {
+      "candidate_id": "4d64893aff015665888b",
+      "confidence": 0.4410710334777832,
+      "old": {
+        "prediction": "Fan",
+        "probabilities": {
+          "Fan": 0.7583091259002686,
+          "Not a fan": 0.21365892887115479,
+          "Unsure": 0.02803199365735054
+        },
+        "elapsed_ms": 3889
+      },
+      "new": [
+        {
+          "prediction": "Fan",
+          "probabilities": {
+            "Fan": 0.7792381048202515,
+            "Not a fan": 0.1912638247013092,
+            "Unsure": 0.02949804626405239
+          },
+          "wider": false,
+          "latency_ms": 11256
+        },
+        {
+          "prediction": "Fan",
+          "probabilities": {
+            "Fan": 0.6960921883583069,
+            "Not a fan": 0.2619481682777405,
+            "Unsure": 0.04195965453982353
+          },
+          "wider": true,
+          "latency_ms": 2148
+        }
+      ],
+      "final_verdict": "unsure"
+    },
+    {
+      "candidate_id": "8e4d186aa717dee5b0ec",
+      "confidence": 0.4821852743625641,
+      "old": {
+        "prediction": "Fan",
+        "probabilities": {
+          "Fan": 0.7345246076583862,
+          "Not a fan": 0.23482312262058258,
+          "Unsure": 0.030652238056063652
+        },
+        "elapsed_ms": 2189
+      },
+      "new": [
+        {
+          "prediction": "Fan",
+          "probabilities": {
+            "Fan": 0.8547202944755554,
+            "Not a fan": 0.12671245634555817,
+            "Unsure": 0.018567228689789772
+          },
+          "wider": false,
+          "latency_ms": 9103
+        }
+      ],
+      "final_verdict": "fan"
+    }
+  ]
+}

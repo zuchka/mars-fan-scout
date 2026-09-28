@@ -1,0 +1,48 @@
+{
+  "format": "mars-fan-holdout-v1",
+  "selection": "Selected from reduced source overview before detector output was viewed",
+  "crops": [
+    {
+      "id": "holdout-01",
+      "observation": "ESP_092344_0970",
+      "source_raw_bounds": [
+        3840,
+        5760,
+        5888,
+        7808
+      ],
+      "source_scale_m_per_pixel": 0.5,
+      "working_scale_m_per_pixel": 1,
+      "image": "holdout-01.jpg",
+      "label_status": "unlabeled; detector has not been run"
+    },
+    {
+      "id": "holdout-02",
+      "observation": "ESP_092344_0970",
+      "source_raw_bounds": [
+        6720,
+        8320,
+        8768,
+        10368
+      ],
+      "source_scale_m_per_pixel": 0.5,
+      "working_scale_m_per_pixel": 1,
+      "image": "holdout-02.jpg",
+      "label_status": "unlabeled; detector has not been run"
+    },
+    {
+      "id": "holdout-03",
+      "observation": "ESP_092344_0970",
+      "source_raw_bounds": [
+        9120,
+        11200,
+        11168,
+        13248
+      ],
+      "source_scale_m_per_pixel": 0.5,
+      "working_scale_m_per_pixel": 1,
+      "image": "holdout-03.jpg",
+      "label_status": "unlabeled; detector has not been run"
+    }
+  ]
+}

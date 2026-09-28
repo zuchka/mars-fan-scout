@@ -1,0 +1,262 @@
+{
+  "format": "mars-fan-demo-candidate-report-v1",
+  "model_id": "matt-abrams/mars-polar-fan-masks-1-rfdetr-seg-small-t1",
+  "method": "Frozen model responses, bbox-center proximity within the existing 75px tolerance; non-expert marks and no mask boundary score.",
+  "sample": {
+    "raw_predictions": 27,
+    "deduplicated": 22,
+    "raw_sub_50px_proposals": 4,
+    "featured": [
+      {
+        "source_index": 0,
+        "confidence": 0.56,
+        "area_px": 2557,
+        "center_px": [
+          427,
+          496
+        ]
+      },
+      {
+        "source_index": 11,
+        "confidence": 0.441,
+        "area_px": 3878,
+        "center_px": [
+          818,
+          886
+        ]
+      },
+      {
+        "source_index": 8,
+        "confidence": 0.481,
+        "area_px": 3171,
+        "center_px": [
+          901,
+          263
+        ]
+      }
+    ]
+  },
+  "locked": {
+    "crops": [
+      {
+        "crop": "locked-01",
+        "marked_clear_deposits": 3,
+        "proposals": 32,
+        "featured": [
+          {
+            "source_index": 0,
+            "confidence": 0.529,
+            "area_px": 3578,
+            "center_px": [
+              245,
+              196
+            ]
+          },
+          {
+            "source_index": 1,
+            "confidence": 0.515,
+            "area_px": 2655,
+            "center_px": [
+              724,
+              700
+            ]
+          },
+          {
+            "source_index": 2,
+            "confidence": 0.432,
+            "area_px": 2676,
+            "center_px": [
+              798,
+              313
+            ]
+          }
+        ],
+        "clear_marks_near_any_proposal": 3,
+        "clear_marks_near_featured": 3
+      },
+      {
+        "crop": "locked-02",
+        "marked_clear_deposits": 3,
+        "proposals": 24,
+        "featured": [
+          {
+            "source_index": 2,
+            "confidence": 0.487,
+            "area_px": 5883,
+            "center_px": [
+              865,
+              65
+            ]
+          },
+          {
+            "source_index": 0,
+            "confidence": 0.535,
+            "area_px": 3246,
+            "center_px": [
+              649,
+              431
+            ]
+          },
+          {
+            "source_index": 3,
+            "confidence": 0.485,
+            "area_px": 2115,
+            "center_px": [
+              833,
+              570
+            ]
+          }
+        ],
+        "clear_marks_near_any_proposal": 3,
+        "clear_marks_near_featured": 2
+      },
+      {
+        "crop": "locked-03",
+        "marked_clear_deposits": 3,
+        "proposals": 12,
+        "featured": [
+          {
+            "source_index": 1,
+            "confidence": 0.565,
+            "area_px": 7850,
+            "center_px": [
+              306,
+              413
+            ]
+          },
+          {
+            "source_index": 0,
+            "confidence": 0.577,
+            "area_px": 4246,
+            "center_px": [
+              687,
+              181
+            ]
+          },
+          {
+            "source_index": 3,
+            "confidence": 0.356,
+            "area_px": 1953,
+            "center_px": [
+              407,
+              797
+            ]
+          }
+        ],
+        "clear_marks_near_any_proposal": 3,
+        "clear_marks_near_featured": 3
+      },
+      {
+        "crop": "locked-04",
+        "marked_clear_deposits": 0,
+        "proposals": 11,
+        "featured": [
+          {
+            "source_index": 0,
+            "confidence": 0.422,
+            "area_px": 6247,
+            "center_px": [
+              598,
+              58
+            ]
+          },
+          {
+            "source_index": 1,
+            "confidence": 0.372,
+            "area_px": 2196,
+            "center_px": [
+              712,
+              819
+            ]
+          },
+          {
+            "source_index": 3,
+            "confidence": 0.256,
+            "area_px": 131,
+            "center_px": [
+              206,
+              65
+            ]
+          }
+        ],
+        "clear_marks_near_any_proposal": 0,
+        "clear_marks_near_featured": 0
+      },
+      {
+        "crop": "locked-05",
+        "marked_clear_deposits": 4,
+        "proposals": 36,
+        "featured": [
+          {
+            "source_index": 0,
+            "confidence": 0.561,
+            "area_px": 2392,
+            "center_px": [
+              324,
+              573
+            ]
+          },
+          {
+            "source_index": 3,
+            "confidence": 0.413,
+            "area_px": 3652,
+            "center_px": [
+              939,
+              473
+            ]
+          },
+          {
+            "source_index": 2,
+            "confidence": 0.441,
+            "area_px": 2880,
+            "center_px": [
+              769,
+              822
+            ]
+          }
+        ],
+        "clear_marks_near_any_proposal": 4,
+        "clear_marks_near_featured": 3
+      },
+      {
+        "crop": "locked-06",
+        "marked_clear_deposits": 3,
+        "proposals": 51,
+        "featured": [
+          {
+            "source_index": 2,
+            "confidence": 0.402,
+            "area_px": 4231,
+            "center_px": [
+              860,
+              414
+            ]
+          },
+          {
+            "source_index": 1,
+            "confidence": 0.423,
+            "area_px": 2852,
+            "center_px": [
+              615,
+              865
+            ]
+          },
+          {
+            "source_index": 0,
+            "confidence": 0.45,
+            "area_px": 1558,
+            "center_px": [
+              257,
+              221
+            ]
+          }
+        ],
+        "clear_marks_near_any_proposal": 3,
+        "clear_marks_near_featured": 3
+      }
+    ],
+    "clear_marks_total": 16,
+    "clear_marks_near_any_proposal": 16,
+    "clear_marks_near_featured": 14
+  }
+}

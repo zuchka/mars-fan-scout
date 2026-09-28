@@ -1,0 +1,121 @@
+{
+  "results": [
+    {
+      "id": "positive-0",
+      "view": "new",
+      "prompt": "old",
+      "http_status": 200,
+      "prediction": "Not a fan",
+      "probabilities": {
+        "Fan": 0.44562530517578125,
+        "Not a fan": 0.5029909610748291,
+        "Unsure": 0.05138375982642174
+      },
+      "error": null
+    },
+    {
+      "id": "positive-11",
+      "view": "new",
+      "prompt": "old",
+      "http_status": 200,
+      "prediction": "Not a fan",
+      "probabilities": {
+        "Fan": 0.21020160615444183,
+        "Not a fan": 0.6693252921104431,
+        "Unsure": 0.12047309428453445
+      },
+      "error": null
+    },
+    {
+      "id": "positive-8",
+      "view": "new",
+      "prompt": "old",
+      "http_status": 200,
+      "prediction": "Not a fan",
+      "probabilities": {
+        "Fan": 0.2785063087940216,
+        "Not a fan": 0.6546200513839722,
+        "Unsure": 0.06687364727258682
+      },
+      "error": null
+    },
+    {
+      "id": "positive-0",
+      "view": "old",
+      "prompt": "new",
+      "http_status": 200,
+      "prediction": "Fan",
+      "probabilities": {
+        "Fan": 0.7970715165138245,
+        "Not a fan": 0.18821504712104797,
+        "Unsure": 0.014713374897837639
+      },
+      "error": null
+    },
+    {
+      "id": "positive-11",
+      "view": "old",
+      "prompt": "new",
+      "http_status": 200,
+      "prediction": "Fan",
+      "probabilities": {
+        "Fan": 0.8233245015144348,
+        "Not a fan": 0.16564299166202545,
+        "Unsure": 0.011032555252313614
+      },
+      "error": null
+    },
+    {
+      "id": "positive-8",
+      "view": "old",
+      "prompt": "new",
+      "http_status": 200,
+      "prediction": "Fan",
+      "probabilities": {
+        "Fan": 0.7966058254241943,
+        "Not a fan": 0.18958038091659546,
+        "Unsure": 0.013813860714435577
+      },
+      "error": null
+    },
+    {
+      "id": "negative-rock-shadow",
+      "view": "new",
+      "prompt": "old",
+      "http_status": 200,
+      "prediction": "Fan",
+      "probabilities": {
+        "Fan": 0.5732566714286804,
+        "Not a fan": 0.38788488507270813,
+        "Unsure": 0.03885851427912712
+      },
+      "error": null
+    },
+    {
+      "id": "negative-plain-terrain",
+      "view": "new",
+      "prompt": "old",
+      "http_status": 200,
+      "prediction": "Not a fan",
+      "probabilities": {
+        "Fan": 0.3632674515247345,
+        "Not a fan": 0.5692718625068665,
+        "Unsure": 0.06746072322130203
+      },
+      "error": null
+    },
+    {
+      "id": "negative-textured-ridge",
+      "view": "new",
+      "prompt": "old",
+      "http_status": 200,
+      "prediction": "Not a fan",
+      "probabilities": {
+        "Fan": 0.288204550743103,
+        "Not a fan": 0.6095334887504578,
+        "Unsure": 0.10226194560527802
+      },
+      "error": null
+    }
+  ]
+}

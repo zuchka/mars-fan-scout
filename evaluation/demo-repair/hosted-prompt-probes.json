@@ -1,0 +1,255 @@
+{
+  "variants": [
+    {
+      "id": "balanced",
+      "state": "This is a south-polar image of Mars. The orange box points to one candidate. A fan is a dark surface deposit with a narrow source that broadens into a connected plume. Inspect pixels inside and around the box because the detector may mark only the core. A separate dark patch, a shadow cast by relief, and a linear ridge are not fans. Choose Unsure if the visible source or widening plume cannot be established.",
+      "question": "What is the marked structure?"
+    },
+    {
+      "id": "strict",
+      "state": "Inspect the orange marked region and immediately connected pixels in this south-polar Mars image. To call Fan, require BOTH a discernible narrow source and a broadening, contiguous dark deposit. Dark spots, rough terrain, shadows, and linear features without that shape are Not a fan. A vague dark gradient with no clear source is Unsure. The marker is a pointer, not the full extent of a plume.",
+      "question": "Do the visible pixels support a polar fan, a non-fan, or an uncertain case?"
+    },
+    {
+      "id": "neutral",
+      "state": "The orange rectangle identifies a feature to classify in a Mars polar image. Use the original pixels around it. Class Fan means a dark plume spreading from a source. Class Not a fan means another visible structure such as a spot, cliff shadow, ridge, or terrain texture. Class Unsure means there is not enough visual evidence to distinguish these.",
+      "question": "Which class best fits the marked feature?"
+    }
+  ],
+  "results": [
+    {
+      "variant": "balanced",
+      "id": "sample-0",
+      "http_status": 200,
+      "prediction": "Fan",
+      "probabilities": {
+        "Fan": 0.8030198812484741,
+        "Not a fan": 0.1597147285938263,
+        "Unsure": 0.037265460938215256
+      },
+      "error": null,
+      "elapsed_ms": 592
+    },
+    {
+      "variant": "balanced",
+      "id": "sample-11",
+      "http_status": 200,
+      "prediction": "Fan",
+      "probabilities": {
+        "Fan": 0.7737505435943604,
+        "Not a fan": 0.17561224102973938,
+        "Unsure": 0.050637226551771164
+      },
+      "error": null,
+      "elapsed_ms": 419
+    },
+    {
+      "variant": "balanced",
+      "id": "sample-8",
+      "http_status": 200,
+      "prediction": "Fan",
+      "probabilities": {
+        "Fan": 0.8430632948875427,
+        "Not a fan": 0.12831313908100128,
+        "Unsure": 0.028623541817069054
+      },
+      "error": null,
+      "elapsed_ms": 230
+    },
+    {
+      "variant": "balanced",
+      "id": "rock-shadow",
+      "http_status": 200,
+      "prediction": "Fan",
+      "probabilities": {
+        "Fan": 0.7620559334754944,
+        "Not a fan": 0.2099684774875641,
+        "Unsure": 0.027975590899586678
+      },
+      "error": null,
+      "elapsed_ms": 231
+    },
+    {
+      "variant": "balanced",
+      "id": "plain-terrain",
+      "http_status": 200,
+      "prediction": "Fan",
+      "probabilities": {
+        "Fan": 0.8339446783065796,
+        "Not a fan": 0.13818034529685974,
+        "Unsure": 0.027874980121850967
+      },
+      "error": null,
+      "elapsed_ms": 229
+    },
+    {
+      "variant": "balanced",
+      "id": "textured-ridge",
+      "http_status": 200,
+      "prediction": "Fan",
+      "probabilities": {
+        "Fan": 0.729338526725769,
+        "Not a fan": 0.22439929842948914,
+        "Unsure": 0.046262212097644806
+      },
+      "error": null,
+      "elapsed_ms": 229
+    },
+    {
+      "variant": "strict",
+      "id": "sample-0",
+      "http_status": 200,
+      "prediction": "Fan",
+      "probabilities": {
+        "Fan": 0.667699933052063,
+        "Not a fan": 0.1850517988204956,
+        "Unsure": 0.1472482830286026
+      },
+      "error": null,
+      "elapsed_ms": 230
+    },
+    {
+      "variant": "strict",
+      "id": "sample-11",
+      "http_status": 200,
+      "prediction": "Fan",
+      "probabilities": {
+        "Fan": 0.7257661819458008,
+        "Not a fan": 0.06466752290725708,
+        "Unsure": 0.2095663696527481
+      },
+      "error": null,
+      "elapsed_ms": 164
+    },
+    {
+      "variant": "strict",
+      "id": "sample-8",
+      "http_status": 200,
+      "prediction": "Fan",
+      "probabilities": {
+        "Fan": 0.6801279783248901,
+        "Not a fan": 0.13082276284694672,
+        "Unsure": 0.18904924392700195
+      },
+      "error": null,
+      "elapsed_ms": 220
+    },
+    {
+      "variant": "strict",
+      "id": "rock-shadow",
+      "http_status": 200,
+      "prediction": "Fan",
+      "probabilities": {
+        "Fan": 0.553331196308136,
+        "Not a fan": 0.40482571721076965,
+        "Unsure": 0.04184303805232048
+      },
+      "error": null,
+      "elapsed_ms": 223
+    },
+    {
+      "variant": "strict",
+      "id": "plain-terrain",
+      "http_status": 200,
+      "prediction": "Fan",
+      "probabilities": {
+        "Fan": 0.7008090019226074,
+        "Not a fan": 0.12406307458877563,
+        "Unsure": 0.17512792348861694
+      },
+      "error": null,
+      "elapsed_ms": 224
+    },
+    {
+      "variant": "strict",
+      "id": "textured-ridge",
+      "http_status": 200,
+      "prediction": "Fan",
+      "probabilities": {
+        "Fan": 0.6936412453651428,
+        "Not a fan": 0.10762722045183182,
+        "Unsure": 0.19873155653476715
+      },
+      "error": null,
+      "elapsed_ms": 219
+    },
+    {
+      "variant": "neutral",
+      "id": "sample-0",
+      "http_status": 200,
+      "prediction": "Fan",
+      "probabilities": {
+        "Fan": 0.9111759066581726,
+        "Not a fan": 0.08466983586549759,
+        "Unsure": 0.00415416294708848
+      },
+      "error": null,
+      "elapsed_ms": 218
+    },
+    {
+      "variant": "neutral",
+      "id": "sample-11",
+      "http_status": 200,
+      "prediction": "Fan",
+      "probabilities": {
+        "Fan": 0.9552803635597229,
+        "Not a fan": 0.04148309677839279,
+        "Unsure": 0.0032365398947149515
+      },
+      "error": null,
+      "elapsed_ms": 165
+    },
+    {
+      "variant": "neutral",
+      "id": "sample-8",
+      "http_status": 200,
+      "prediction": "Fan",
+      "probabilities": {
+        "Fan": 0.9708243608474731,
+        "Not a fan": 0.026692844927310944,
+        "Unsure": 0.0024828212335705757
+      },
+      "error": null,
+      "elapsed_ms": 219
+    },
+    {
+      "variant": "neutral",
+      "id": "rock-shadow",
+      "http_status": 200,
+      "prediction": "Fan",
+      "probabilities": {
+        "Fan": 0.9143697023391724,
+        "Not a fan": 0.08195134252309799,
+        "Unsure": 0.0036788859870284796
+      },
+      "error": null,
+      "elapsed_ms": 219
+    },
+    {
+      "variant": "neutral",
+      "id": "plain-terrain",
+      "http_status": 200,
+      "prediction": "Fan",
+      "probabilities": {
+        "Fan": 0.8980692625045776,
+        "Not a fan": 0.09633438289165497,
+        "Unsure": 0.005596392322331667
+      },
+      "error": null,
+      "elapsed_ms": 218
+    },
+    {
+      "variant": "neutral",
+      "id": "textured-ridge",
+      "http_status": 200,
+      "prediction": "Fan",
+      "probabilities": {
+        "Fan": 0.7870489954948425,
+        "Not a fan": 0.2037162333726883,
+        "Unsure": 0.009234790690243244
+      },
+      "error": null,
+      "elapsed_ms": 219
+    }
+  ]
+}

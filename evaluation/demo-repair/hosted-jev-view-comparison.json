@@ -1,0 +1,125 @@
+{
+  "model": "matt-abrams/mars-polar-fan-masks-1-rfdetr-seg-small-t1",
+  "results": [
+    {
+      "source_index": 0,
+      "version": "old",
+      "http_status": 200,
+      "prediction": "Not a fan",
+      "probabilities": {
+        "Fan": 0.15318049490451813,
+        "Not a fan": 0.7932577729225159,
+        "Unsure": 0.05356178060173988
+      },
+      "metrics": {
+        "elapsed_ms": 886,
+        "generated_tokens": 0,
+        "image_token_budget": null,
+        "service_elapsed_ms": 888
+      },
+      "error": null,
+      "backend": "cuda-bf16",
+      "elapsed_ms": 1258
+    },
+    {
+      "source_index": 0,
+      "version": "new",
+      "http_status": 200,
+      "prediction": "Fan",
+      "probabilities": {
+        "Fan": 0.8432667255401611,
+        "Not a fan": 0.14525549113750458,
+        "Unsure": 0.011477726511657238
+      },
+      "metrics": {
+        "elapsed_ms": 172,
+        "generated_tokens": 0,
+        "image_token_budget": null,
+        "service_elapsed_ms": 173
+      },
+      "error": null,
+      "backend": "cuda-bf16",
+      "elapsed_ms": 418
+    },
+    {
+      "source_index": 11,
+      "version": "old",
+      "http_status": 200,
+      "prediction": "Not a fan",
+      "probabilities": {
+        "Fan": 0.29329434037208557,
+        "Not a fan": 0.6671093702316284,
+        "Unsure": 0.039596281945705414
+      },
+      "metrics": {
+        "elapsed_ms": 101,
+        "generated_tokens": 0,
+        "image_token_budget": null,
+        "service_elapsed_ms": 102
+      },
+      "error": null,
+      "backend": "cuda-bf16",
+      "elapsed_ms": 231
+    },
+    {
+      "source_index": 11,
+      "version": "new",
+      "http_status": 200,
+      "prediction": "Fan",
+      "probabilities": {
+        "Fan": 0.7705376744270325,
+        "Not a fan": 0.2123054563999176,
+        "Unsure": 0.01715691201388836
+      },
+      "metrics": {
+        "elapsed_ms": 102,
+        "generated_tokens": 0,
+        "image_token_budget": null,
+        "service_elapsed_ms": 103
+      },
+      "error": null,
+      "backend": "cuda-bf16",
+      "elapsed_ms": 266
+    },
+    {
+      "source_index": 8,
+      "version": "old",
+      "http_status": 200,
+      "prediction": "Not a fan",
+      "probabilities": {
+        "Fan": 0.2345077246427536,
+        "Not a fan": 0.7188162803649902,
+        "Unsure": 0.04667603224515915
+      },
+      "metrics": {
+        "elapsed_ms": 102,
+        "generated_tokens": 0,
+        "image_token_budget": null,
+        "service_elapsed_ms": 102
+      },
+      "error": null,
+      "backend": "cuda-bf16",
+      "elapsed_ms": 222
+    },
+    {
+      "source_index": 8,
+      "version": "new",
+      "http_status": 200,
+      "prediction": "Fan",
+      "probabilities": {
+        "Fan": 0.797027587890625,
+        "Not a fan": 0.18968075513839722,
+        "Unsure": 0.013291693292558193
+      },
+      "metrics": {
+        "elapsed_ms": 102,
+        "generated_tokens": 0,
+        "image_token_budget": null,
+        "service_elapsed_ms": 103
+      },
+      "error": null,
+      "backend": "cuda-bf16",
+      "elapsed_ms": 222
+    }
+  ]
+}

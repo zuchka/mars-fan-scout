@@ -38,11 +38,14 @@ export async function makeEvidence(imageBytes, info, candidate, kind) {
   const outWidth = Math.max(1, Math.round(width * outputScale));
   const outHeight = Math.max(1, Math.round(height * outputScale));
   const pixels = await sharp(imageBytes).extract({ left: x, top: y, width, height }).resize(outWidth, outHeight).jpeg({ quality: 90 }).toBuffer();
-  const points = candidate.polygon.map(([px, py]) => `${((px - x) * outWidth / width).toFixed(2)},${((py - y) * outHeight / height).toFixed(2)}`).join(" ");
-  const svg = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${outWidth}" height="${outHeight}"><polygon points="${svgEscape(points)}" fill="#ff704a" fill-opacity="0.13" stroke="#ff704a" stroke-width="3"/></svg>`);
+  const xs = candidate.polygon.map(point => point[0]), ys = candidate.polygon.map(point => point[1]);
+  const left = (Math.min(...xs) - x) * outWidth / width, top = (Math.min(...ys) - y) * outHeight / height;
+  const markerWidth = (Math.max(...xs) - Math.min(...xs)) * outWidth / width;
+  const markerHeight = (Math.max(...ys) - Math.min(...ys)) * outHeight / height;
+  const svg = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${outWidth}" height="${outHeight}"><rect x="${svgEscape(left.toFixed(2))}" y="${svgEscape(top.toFixed(2))}" width="${svgEscape(markerWidth.toFixed(2))}" height="${svgEscape(markerHeight.toFixed(2))}" fill="none" stroke="#ff704a" stroke-width="2" stroke-dasharray="6 4"/></svg>`);
   const overlay = await sharp(pixels).composite([{ input: svg }]).jpeg({ quality: 90 }).toBuffer();
   await imageInfoForCrop(pixels, outWidth, outHeight);
-  return { pixels, overlay, meta: { kind, requested_bounds_px: box.requested, actual_bounds_px: box.actual, clipped: box.clipped, output_width: outWidth, output_height: outHeight, scale_x: outWidth / width, scale_y: outHeight / height, source_sha256: sha256(pixels), overlay_sha256: sha256(overlay) } };
+  return { pixels, overlay, meta: { kind, overlay_style: "region_pointer_v2", requested_bounds_px: box.requested, actual_bounds_px: box.actual, clipped: box.clipped, output_width: outWidth, output_height: outHeight, scale_x: outWidth / width, scale_y: outHeight / height, source_sha256: sha256(pixels), overlay_sha256: sha256(overlay) } };
 }
 
 async function imageInfoForCrop(bytes, width, height) {

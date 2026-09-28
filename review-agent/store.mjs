@@ -48,7 +48,7 @@ export class ReviewStore {
     return row;
   }
   async create(body) {
-    if (!body || typeof body.image_base64 !== "string" || body.image_base64.length > 56 * 1024 * 1024 || !Array.isArray(body.candidates) || body.candidates.length < 1 || body.candidates.length > (body.demo === true ? 3 : 250)) throw new Error("Invalid review session");
+    if (!body || typeof body.image_base64 !== "string" || body.image_base64.length > 56 * 1024 * 1024 || !Array.isArray(body.candidates) || body.candidates.length < 1 || body.candidates.length > 250) throw new Error("Invalid review session");
     if (!/^[A-Za-z0-9+/]+={0,2}$/.test(body.image_base64)) throw new Error("Invalid image encoding");
     const image = Buffer.from(body.image_base64, "base64");
     const info = await imageInfo(image);
@@ -84,8 +84,10 @@ export class ReviewStore {
   async saveEvidence(session, evidence) {
     const id = randomUUID();
     const sourceName = `${id}-source.jpg`, overlayName = `${id}-mask.jpg`;
-    await writeFile(this.path(session.id, sourceName), evidence.pixels, { mode: 0o600 });
-    await writeFile(this.path(session.id, overlayName), evidence.overlay, { mode: 0o600 });
+    await Promise.all([
+      writeFile(this.path(session.id, sourceName), evidence.pixels, { mode: 0o600 }),
+      writeFile(this.path(session.id, overlayName), evidence.overlay, { mode: 0o600 }),
+    ]);
     return { id, ...evidence.meta, source_name: sourceName, overlay_name: overlayName };
   }
   async review(session, body) {

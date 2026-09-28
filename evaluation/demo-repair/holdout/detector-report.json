@@ -1,0 +1,122 @@
+[
+  {
+    "id": "holdout-01",
+    "raw_count": 71,
+    "deduplicated_count": 65,
+    "featured": [
+      {
+        "source_index": 0,
+        "confidence": 0.4809509515762329,
+        "area_px": 888,
+        "bounds": {
+          "left": 294,
+          "top": 355,
+          "right": 364,
+          "bottom": 423
+        }
+      },
+      {
+        "source_index": 9,
+        "confidence": 0.34169232845306396,
+        "area_px": 1242,
+        "bounds": {
+          "left": 936,
+          "top": 355,
+          "right": 1006,
+          "bottom": 401
+        }
+      },
+      {
+        "source_index": 1,
+        "confidence": 0.4116429388523102,
+        "area_px": 837,
+        "bounds": {
+          "left": 457,
+          "top": 146,
+          "right": 533,
+          "bottom": 173
+        }
+      }
+    ]
+  },
+  {
+    "id": "holdout-02",
+    "raw_count": 75,
+    "deduplicated_count": 72,
+    "featured": [
+      {
+        "source_index": 0,
+        "confidence": 0.572424054145813,
+        "area_px": 2379,
+        "bounds": {
+          "left": 160,
+          "top": 514,
+          "right": 286,
+          "bottom": 562
+        }
+      },
+      {
+        "source_index": 2,
+        "confidence": 0.47790437936782837,
+        "area_px": 1736,
+        "bounds": {
+          "left": 749,
+          "top": 413,
+          "right": 844,
+          "bottom": 475
+        }
+      },
+      {
+        "source_index": 1,
+        "confidence": 0.5166716575622559,
+        "area_px": 1231,
+        "bounds": {
+          "left": 244,
+          "top": 851,
+          "right": 333,
+          "bottom": 893
+        }
+      }
+    ]
+  },
+  {
+    "id": "holdout-03",
+    "raw_count": 24,
+    "deduplicated_count": 21,
+    "featured": [
+      {
+        "source_index": 0,
+        "confidence": 0.40268567204475403,
+        "area_px": 2171,
+        "bounds": {
+          "left": 661,
+          "top": 33,
+          "right": 775,
+          "bottom": 80
+        }
+      },
+      {
+        "source_index": 9,
+        "confidence": 0.27953338623046875,
+        "area_px": 3385,
+        "bounds": {
+          "left": 814,
+          "top": 34,
+          "right": 910,
+          "bottom": 116
+        }
+      },
+      {
+        "source_index": 10,
+        "confidence": 0.2757143974304199,
+        "area_px": 959,
+        "bounds": {
+          "left": 586,
+          "top": 820,
+          "right": 648,
+          "bottom": 865
+        }
+      }
+    ]
+  }
+]

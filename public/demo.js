@@ -1,3 +1,5 @@
+import { predictionsFromRoboflow, showcaseCandidates } from "./candidates.js";
+
 const $ = id => document.getElementById(id);
 const NS = "http://www.w3.org/2000/svg";
 const SAMPLE = { path: "/images/scout-2024-dev.jpg", name: "Spiders in Manhattan", observation: "ESP_082142_0935" };
@@ -83,7 +85,7 @@ async function setImage(file, { sample = false, name = file.name, observation = 
   $("results-area").hidden = true;
   $("candidate-detail").hidden = true;
   $("roboflow-line").textContent = "Waiting for the image scan.";
-  $("jev-line").textContent = "It can ask for one wider view before deciding.";
+  $("jev-line").textContent = "It can ask for one wider view before suggesting a label.";
   $("answer-line").textContent = "Fan, not a fan, or unsure—shown beside the evidence.";
 }
 async function loadSample() {
@@ -97,35 +99,19 @@ function polygonBounds(points) {
   return { left: Math.min(...points.map(p => p[0])), top: Math.min(...points.map(p => p[1])),
     right: Math.max(...points.map(p => p[0])), bottom: Math.max(...points.map(p => p[1])) };
 }
-function boxIoU(a, b) {
-  const overlap = Math.max(0, Math.min(a.right, b.right) - Math.max(a.left, b.left)) * Math.max(0, Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top));
-  const area = x => (x.right - x.left) * (x.bottom - x.top);
-  return overlap / Math.max(1, area(a) + area(b) - overlap);
-}
-function predictionsFromRoboflow(data, canvas) {
-  const imageWidth = Number(data.image?.width) || canvas.width;
-  const imageHeight = Number(data.image?.height) || canvas.height;
-  const normalized = (Array.isArray(data.predictions) ? data.predictions : []).map(item => {
-    const raw = Array.isArray(item.points) ? item.points : Array.isArray(item.polygon) ? item.polygon : [];
-    const polygon = raw.map(point => Array.isArray(point) ? point : [point.x, point.y])
-      .map(point => [Math.max(0, Math.min(canvas.width, Number(point[0]) * canvas.width / imageWidth)), Math.max(0, Math.min(canvas.height, Number(point[1]) * canvas.height / imageHeight))])
-      .filter(point => point.every(Number.isFinite));
-    const confidence = Number(item.confidence);
-    if (polygon.length < 3 || !Number.isFinite(confidence) || confidence < .2) return null;
-    return { polygon, confidence, bounds: polygonBounds(polygon) };
-  }).filter(Boolean).sort((a, b) => b.confidence - a.confidence);
-  const unique = [];
-  for (const item of normalized) if (!unique.some(other => boxIoU(item.bounds, other.bounds) > .42)) unique.push(item);
-  return unique;
-}
-function showcaseCandidates(items) {
-  if (items.length <= 3) return items;
-  return [items[0], items[Math.floor((items.length - 1) / 2)], items.at(-1)];
+function checkedCandidates() { return state.candidates.slice(0, 3); }
+function contextBounds(candidate) {
+  const box = polygonBounds(candidate.polygon);
+  const side = Math.ceil(Math.max(105, box.right - box.left, box.bottom - box.top) * 1.65);
+  const cx = (box.left + box.right) / 2, cy = (box.top + box.bottom) / 2;
+  return { left: Math.max(0, Math.floor(cx - side / 2)), top: Math.max(0, Math.floor(cy - side / 2)),
+    right: Math.min(state.canvas.width, Math.ceil(cx + side / 2)), bottom: Math.min(state.canvas.height, Math.ceil(cy + side / 2)) };
 }
 function drawMasks() {
   const overlay = $("candidate-overlay");
   overlay.replaceChildren();
   state.candidates.forEach((candidate, index) => {
+    if (index >= 3 && candidate.id !== state.selectedId) return;
     const polygon = document.createElementNS(NS, "polygon");
     polygon.setAttribute("points", candidate.polygon.map(point => point.join(",")).join(" "));
     polygon.setAttribute("class", "candidate-mask" + (candidate.id === state.selectedId ? " active" : ""));
@@ -138,7 +124,16 @@ function drawMasks() {
     label.textContent = String(index + 1).padStart(2, "0");
     overlay.appendChild(label);
   });
-  $("image-stamp").textContent = state.candidates.length ? `${state.candidates.length} MARKED SHAPES` : "ORIGINAL IMAGE";
+  const selected = state.candidates.find(candidate => candidate.id === state.selectedId);
+  if (selected) {
+    const box = contextBounds(selected);
+    const window = document.createElementNS(NS, "rect");
+    window.setAttribute("x", String(box.left)); window.setAttribute("y", String(box.top));
+    window.setAttribute("width", String(box.right - box.left)); window.setAttribute("height", String(box.bottom - box.top));
+    window.setAttribute("class", "context-window");
+    overlay.appendChild(window);
+  }
+  $("image-stamp").textContent = state.candidates.length ? `${checkedCandidates().length} JEV CHECKS · ${state.candidates.length} ROBOFLOW REGIONS` : "ORIGINAL IMAGE";
 }
 function latestRun() { return Object.values(state.session?.runs || {}).at(-1) || null; }
 function agentResult(id) { return latestRun()?.results?.[id] || null; }
@@ -152,9 +147,16 @@ function verdictInfo(result) {
 function renderResults() {
   if (!state.candidates.length) return;
   $("results-area").hidden = false;
-  $("results-count").textContent = `${state.candidates.length} shapes`;
+  const completed = Object.values(latestRun()?.results || {}).filter(result => result.status === "complete").length;
+  $("results-count").textContent = latestRun()?.status === "complete"
+    ? `${completed} checked of ${state.candidates.length}`
+    : `${completed} checked · ${checkedCandidates().length} selected of ${state.candidates.length}`;
   const list = $("results-list");
   list.replaceChildren();
+  const otherList = $("other-results-list");
+  otherList.replaceChildren();
+  $("other-regions").hidden = state.candidates.length <= 3;
+  $("other-regions-count").textContent = String(Math.max(0, state.candidates.length - 3));
   state.candidates.forEach((candidate, index) => {
     const button = document.createElement("button");
     button.type = "button";
@@ -163,11 +165,11 @@ function renderResults() {
     const number = document.createElement("span"); number.className = "index"; number.textContent = String(index + 1);
     const name = document.createElement("span"); name.className = "name"; name.textContent = `Shape ${String(index + 1).padStart(2, "0")}`;
     const confidence = document.createElement("small"); confidence.textContent = `Roboflow ${Math.round(candidate.confidence * 100)}%`; name.appendChild(confidence);
-    const info = verdictInfo(agentResult(candidate.id));
+    const info = index < 3 ? verdictInfo(agentResult(candidate.id)) : { label: "Not checked", className: "" };
     const verdict = document.createElement("span"); verdict.className = "verdict " + info.className; verdict.textContent = info.label;
     button.append(number, name, verdict);
     button.addEventListener("click", () => { state.selectedId = candidate.id; drawMasks(); renderResults(); showDetail(); });
-    list.appendChild(button);
+    (index < 3 ? list : otherList).appendChild(button);
   });
 }
 async function evidenceImage(sessionId, evidenceId) {
@@ -182,9 +184,16 @@ async function evidenceImage(sessionId, evidenceId) {
 function explanation(result) {
   if (result.status !== "complete") return result.trace?.some(event => event.type === "wider_view_created") ? "Jev-Omni asked for a wider view, but the follow-up did not finish." : "Jev-Omni could not finish this check. The source pixels are still visible above.";
   const wider = result.trace?.some(event => event.type === "wider_view_created");
-  if (result.verdict === "fan") return `${wider ? "Jev-Omni asked to see more of the image, then checked again. " : ""}Its Fan answer cleared the confidence threshold.`;
-  if (result.verdict === "not_fan") return `${wider ? "Jev-Omni asked to see more of the image, then checked again. " : ""}Its Not a fan answer cleared the confidence threshold.`;
-  return wider ? "The first view was ambiguous. Jev-Omni requested a wider crop, checked again, and stayed unsure." : "The marked pixels did not support a confident Fan or Not a fan call.";
+  if (result.verdict === "fan") return `${wider ? "Jev-Omni asked to see more of the image, then checked again. " : ""}Its Fan score cleared the demo threshold. Check the source pixels before accepting it.`;
+  if (result.verdict === "not_fan") return `${wider ? "Jev-Omni asked to see more of the image, then checked again. " : ""}Its Not a fan score cleared the demo threshold. Check the source pixels before rejecting it.`;
+  return wider ? "The first view was ambiguous. Jev-Omni requested a wider crop, checked again, and stayed unsure." : "The visible region did not support a confident Fan or Not a fan call.";
+}
+function localSourceCrop(candidate) {
+  const box = contextBounds(candidate);
+  const x = box.left, y = box.top, width = box.right - x, height = box.bottom - y;
+  const crop = document.createElement("canvas"); crop.width = width; crop.height = height;
+  crop.getContext("2d").drawImage(state.canvas, x, y, width, height, 0, 0, width, height);
+  return crop.toDataURL("image/jpeg", .9);
 }
 async function showDetail() {
   const candidate = state.candidates.find(item => item.id === state.selectedId);
@@ -193,11 +202,19 @@ async function showDetail() {
   const index = state.candidates.indexOf(candidate) + 1;
   $("candidate-detail").hidden = false;
   $("detail-name").textContent = `SHAPE ${String(index).padStart(2, "0")}`;
-  $("detail-verdict").textContent = verdictInfo(result).label;
-  $("detail-explanation").textContent = result ? explanation(result) : "Jev-Omni is inspecting this marked shape. The answer will appear here automatically.";
+  const checked = index <= 3;
+  $("detail-verdict").textContent = checked ? verdictInfo(result).label : "Not checked";
+  $("detail-explanation").textContent = checked ? result ? explanation(result) : "Jev-Omni is inspecting this region. The answer will appear here automatically." : "Roboflow proposed this region. Jev checked only the three featured regions; inspect these source pixels yourself.";
   $("detail-timing").textContent = result?.status === "complete" ? `${result.trace?.filter(event => event.type === "provider_call_completed").length || 1} visual look${result.trace?.filter(event => event.type === "provider_call_completed").length === 1 ? "" : "s"} · ${(result.elapsed_ms / 1000).toFixed(1)}s` : "";
   $("evidence-grid").hidden = true;
   $("wider-figure").hidden = true;
+  if (!checked && state.canvas) {
+    $("initial-evidence").src = localSourceCrop(candidate);
+    $("initial-caption").textContent = "Source pixels · Jev did not check this region";
+    $("evidence-grid").hidden = false;
+    return;
+  }
+  $("initial-caption").textContent = "The region Jev-Omni saw";
   if (!result?.trace || !state.session) return;
   const initial = result.trace.find(event => event.type === "evidence_created");
   const wider = result.trace.find(event => event.type === "wider_view_created");
@@ -219,8 +236,10 @@ function renderSession() {
   const run = latestRun();
   const completed = run ? Object.keys(run.results || {}).length : 0;
   const widerCount = Object.values(run?.results || {}).filter(result => result.trace?.some(event => event.type === "wider_view_created")).length;
-  $("roboflow-line").textContent = `Marked ${state.candidates.length} shape${state.candidates.length === 1 ? "" : "s"} for Jev-Omni to inspect.`;
-  $("jev-line").textContent = run?.status === "complete" ? `Finished ${state.candidates.length} visual check${state.candidates.length === 1 ? "" : "s"}${widerCount ? `; requested a wider view ${widerCount} time${widerCount === 1 ? "" : "s"}` : ""}.` : `Checking marked shapes… ${completed} of ${state.candidates.length} done.`;
+  const checked = run?.candidates?.length || checkedCandidates().length;
+  $("roboflow-line").textContent = `Found ${state.candidates.length} possible regions; Jev-Omni is checking ${checked}.`;
+  const runTime = Number.isFinite(run?.elapsed_ms) ? ` in ${(run.elapsed_ms / 1000).toFixed(1)}s` : "";
+  $("jev-line").textContent = run?.status === "complete" ? `Finished ${checked} visual check${checked === 1 ? "" : "s"}${runTime}${widerCount ? `; requested a wider view ${widerCount} time${widerCount === 1 ? "" : "s"}` : ""}.` : `Checking marked regions… ${completed} of ${checked} done.`;
   if (run?.status === "interrupted") {
     error("Jev-Omni was interrupted while checking this image. Run the demo again to retry.");
   } else if (run?.status === "complete") {
@@ -230,7 +249,7 @@ function renderSession() {
     $("run-again").hidden = false;
     $("image-input").disabled = false;
     state.busy = false;
-    if (counts.unfinished === state.candidates.length) {
+    if (counts.unfinished === checked) {
       error(run.provider_unavailable || "Jev-Omni could not complete the visual checks. The GPU endpoint may be unavailable.");
       $("footer-status").textContent = "Roboflow found the shapes; Jev-Omni is unavailable right now.";
     } else {
@@ -256,7 +275,7 @@ async function pollSession(id, generation) {
 async function runAgent(generation) {
   if (generation !== state.generation || !state.session) return;
   await api(`/api/scout/review-sessions/${state.session.id}/runs`, { method: "POST", headers: { "content-type": "application/json" },
-    body: JSON.stringify({ candidate_ids: state.session.candidates.map(item => item.id), idempotency_key: crypto.randomUUID() }) });
+    body: JSON.stringify({ candidate_ids: state.session.candidates.slice(0, 3).map(item => item.id), idempotency_key: crypto.randomUUID() }) });
   await pollSession(state.session.id, generation);
 }
 async function startRun() {
@@ -278,13 +297,15 @@ async function startRun() {
   $("footer-status").textContent = "A live Roboflow inference is running.";
   phase("roboflow");
   try {
+    const inferenceStarted = performance.now();
     const blob = await canvasBlob(state.canvas);
     const response = await fetch("/api/scout/infer", { method: "POST", headers: { ...authHeaders(), "content-type": "image/jpeg" }, body: blob });
     const data = await response.json();
+    const browserInferMs = Math.round(performance.now() - inferenceStarted);
     if (!response.ok) throw new Error(data.error || "Roboflow could not scan the image");
     if (generation !== state.generation) return;
     const found = predictionsFromRoboflow(data, state.canvas);
-    const chosen = showcaseCandidates(found);
+    const chosen = showcaseCandidates(found, state.canvas);
     if (!chosen.length) {
       $("roboflow-line").textContent = "No possible fans appeared in this crop.";
       $("jev-line").textContent = "Nothing was sent to Jev-Omni.";
@@ -294,16 +315,20 @@ async function startRun() {
       $("image-input").disabled = false;
       state.busy = false; phase("done"); return;
     }
-    $("roboflow-line").textContent = `Found ${found.length} possible shape${found.length === 1 ? "" : "s"}; sending ${chosen.length} across the confidence range to Jev-Omni.`;
-    $("jev-line").textContent = "Jev-Omni is looking at the marked crop pixels…";
+    $("roboflow-line").textContent = `Found ${found.length} possible regions; sending ${chosen.length} substantial regions to Jev-Omni.`;
+    $("jev-line").textContent = "Jev-Omni is looking at the marked regions and nearby pixels…";
     $("footer-status").textContent = "Jev-Omni may ask for more of the image before it answers.";
     phase("jev");
-    const imageBase64 = state.canvas.toDataURL("image/png").split(",")[1];
+    const sessionStarted = performance.now();
+    const imageBase64 = state.canvas.toDataURL("image/jpeg", .91).split(",")[1];
     state.session = await api("/api/scout/review-sessions", { method: "POST", headers: { "content-type": "application/json" },
       body: JSON.stringify({ demo: true, image_base64: imageBase64, name: state.file.name, observation: state.sample ? SAMPLE.observation : null,
         detector_model: state.modelId, detector_responses: [{ tile: { x: 0, y: 0, width: state.canvas.width, height: state.canvas.height }, response: data }],
-        candidates: chosen.map((item, index) => ({ label: `RF-${String(index + 1).padStart(3, "0")}`, polygon: item.polygon, confidence: item.confidence, arm: "assisted" })) }) });
+        candidates: [...chosen, ...found.filter(item => !chosen.includes(item))].map((item, index) => ({ label: `RF-${String(index + 1).padStart(3, "0")}`, polygon: item.polygon, confidence: item.confidence, arm: "assisted" })) }) });
     saveSessionId(state.session.id);
+    console.info("Mars Scout preparation timing", { browser_infer_ms: browserInferMs,
+      roboflow_request_ms: data.scout_timing?.roboflow_request_ms ?? null,
+      session_create_ms: Math.round(performance.now() - sessionStarted), proposals: found.length });
     renderSession();
     await runAgent(generation);
   } catch (cause) { if (generation === state.generation) error(cause.message); }

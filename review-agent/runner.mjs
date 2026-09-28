@@ -38,8 +38,12 @@ export class ReviewRunner {
     try {
       while (this.queue.length) {
         const { session, run } = this.queue.shift();
+        const runStarted = performance.now();
         run.status = "running"; run.started_at = now();
         await this.store.event(session, "run_started", { run_id: run.id });
+        const imageReadStarted = performance.now();
+        const image = session.demo ? await this.store.source(session) : null;
+        run.image_read_ms = session.demo ? Math.round(performance.now() - imageReadStarted) : null;
         const review = async id => {
           if (run.provider_unavailable) {
             run.results[id] = this.fallback([], performance.now(), run.provider_unavailable, "unavailable");
@@ -47,35 +51,43 @@ export class ReviewRunner {
             return;
           }
           const candidate = session.candidates.find(item => item.id === id);
-          try { run.results[id] = await this.reviewCandidate(session, run, candidate); }
+          try { run.results[id] = await this.reviewCandidate(session, run, candidate, image); }
           catch (error) { run.results[id] = { action: "send_to_human", verdict: "unsure", explanation: "Jev error: " + String(error.message).slice(0, 180), explanation_source: "application_rule", status: "error", trace: [], human_review_required: true }; }
           await this.store.event(session, "candidate_terminal", { run_id: run.id, candidate_id: id, result: run.results[id] });
         };
         if (session.demo) await Promise.all(run.candidates.map(review));
         else for (const id of run.candidates) await review(id);
-        run.status = "complete"; run.finished_at = now();
+        run.status = "complete"; run.finished_at = now(); run.elapsed_ms = Math.round(performance.now() - runStarted);
         await this.store.event(session, "run_complete", { run_id: run.id });
       }
     } finally { this.working = false; }
   }
-  async reviewCandidate(session, run, candidate) {
+  async reviewCandidate(session, run, candidate, cachedImage = null) {
     const started = performance.now();
     const trace = [];
-    const image = await this.store.source(session);
+    const image = cachedImage || await this.store.source(session);
+    const evidenceStarted = performance.now();
     const first = await makeEvidence(image, session.image, candidate, "initial");
+    const prepare_ms = Math.round(performance.now() - evidenceStarted);
+    const storeStarted = performance.now();
     const initial = await this.store.saveEvidence(session, first);
+    const save_ms = Math.round(performance.now() - storeStarted);
     session.evidence[initial.id] = { ...initial, candidate_id: candidate.id };
-    trace.push({ type: "evidence_created", evidence_id: initial.id, meta: first.meta, at: now() });
-    await this.store.event(session, "evidence_created", { run_id: run.id, candidate_id: candidate.id, evidence_id: initial.id, meta: first.meta });
+    trace.push({ type: "evidence_created", evidence_id: initial.id, meta: first.meta, prepare_ms, save_ms, at: now() });
+    await this.store.event(session, "evidence_created", { run_id: run.id, candidate_id: candidate.id, evidence_id: initial.id, meta: first.meta, prepare_ms, save_ms });
     const firstCall = await this.call(session, run, candidate, first, false, null, trace, started);
     if (!firstCall) return this.fallback(trace, started, run.provider_unavailable || "Provider unavailable or budget exhausted", run.provider_unavailable ? "unavailable" : "fallback");
     if (firstCall.action.action !== "request_wider_view") return this.terminal(firstCall.action, trace, started);
+    const widerStarted = performance.now();
     const wider = await makeEvidence(image, session.image, candidate, "wider");
     if (!wider) return this.fallback(trace, started, "Wider context unavailable at image boundary", "context_unavailable");
+    const wider_prepare_ms = Math.round(performance.now() - widerStarted);
+    const widerSaveStarted = performance.now();
     const wide = await this.store.saveEvidence(session, wider);
+    const wider_save_ms = Math.round(performance.now() - widerSaveStarted);
     session.evidence[wide.id] = { ...wide, candidate_id: candidate.id };
-    trace.push({ type: "wider_view_created", evidence_id: wide.id, meta: wider.meta, at: now() });
-    await this.store.event(session, "wider_view_created", { run_id: run.id, candidate_id: candidate.id, evidence_id: wide.id, meta: wider.meta });
+    trace.push({ type: "wider_view_created", evidence_id: wide.id, meta: wider.meta, prepare_ms: wider_prepare_ms, save_ms: wider_save_ms, at: now() });
+    await this.store.event(session, "wider_view_created", { run_id: run.id, candidate_id: candidate.id, evidence_id: wide.id, meta: wider.meta, prepare_ms: wider_prepare_ms, save_ms: wider_save_ms });
     const second = await this.call(session, run, candidate, wider, true, firstCall.action, trace, started);
     if (!second) return this.fallback(trace, started, run.provider_unavailable || "Follow-up unavailable or budget exhausted", run.provider_unavailable ? "unavailable" : "fallback");
     return this.terminal(second.action, trace, started);

@@ -2,10 +2,10 @@ export const MODEL_REPO = "akhilaaa3/Jev-Omni";
 export const MODEL_REVISION = "5addda86ddee081a68fb067477ea100c221b8917";
 export const MLX_SOURCE_REVISION = "c050d51354147985d13286cf4acf90f562f2c631";
 export const MODEL = `${MODEL_REPO}@${MODEL_REVISION}`;
-export const PROMPT_VERSION = "mars-fan-jev-choice-1";
+export const PROMPT_VERSION = "mars-fan-jev-choice-2-context";
 export const OPTIONS = ["Fan", "Not a fan", "Unsure"];
-export const QUESTION = "Is the orange-outlined candidate a Martian polar fan deposit?";
-export const STATE = "This is a crop of a south-polar HiRISE image of Mars. The thin orange outline identifies one Roboflow candidate; judge only the deposit inside that outline using the image pixels. A polar fan is a dark, asymmetric deposit that spreads from a narrower source. A dark spot, shadow, image seam, or indistinct shape need not be a fan. Choose Unsure when the visible pixels cannot distinguish the possibilities. Do not infer wind direction.";
+export const QUESTION = "Does the marked region and its contiguous nearby plume show a Martian polar fan deposit?";
+export const STATE = "This is a crop of a south-polar HiRISE image of Mars. The orange marker points to one Roboflow candidate. Its detection boundary may cover only the dark core: inspect the surrounding source pixels for a contiguous plume, while ignoring separate nearby shapes. A polar fan is a dark, asymmetric deposit that spreads from a narrower source. A dark spot, shadow, image seam, or indistinct shape need not be a fan. Choose Unsure when the visible pixels cannot distinguish the possibilities. Do not infer wind direction.";
 
 const scoreKeys = new Set(OPTIONS);
 
@@ -72,12 +72,26 @@ export function makeJevProvider({ url, token = "", imageTokens = null, expectedR
       cost_basis: metadata.cost_basis };
   };
   provider.metadata = metadata;
-  provider.probe = async () => {
-    const response = await fetchImpl(`${origin}/health`, { headers, signal: AbortSignal.timeout(5000) });
+  const checkHealth = async (timeoutMs, scaleUpSeconds = null) => {
+    const response = await fetchImpl(`${origin}/health`, { headers: { ...headers,
+      ...(scaleUpSeconds === null ? {} : { "x-scale-up-timeout": String(scaleUpSeconds) }) }, signal: AbortSignal.timeout(timeoutMs) });
     if (!response.ok) throw new Error(`Jev health HTTP ${response.status}`);
     const body = await response.json();
     if (!body.ready || body.model_repo !== MODEL_REPO || body.model_revision !== expectedRevision || body.backend !== expectedBackend) throw new Error("Jev service is not ready with the pinned checkpoint");
     return body;
+  };
+  provider.probe = () => checkHealth(5000);
+  let warmPromise = null;
+  let lastWarmAt = 0;
+  let lastWarmResult = null;
+  provider.warm = () => {
+    if (!hostedEndpoint) return provider.probe();
+    if (warmPromise) return warmPromise;
+    if (lastWarmResult && Date.now() - lastWarmAt < 120000) return Promise.resolve(lastWarmResult);
+    warmPromise = checkHealth(90000, 80).then(result => {
+      lastWarmAt = Date.now(); lastWarmResult = result; return result;
+    }).finally(() => { warmPromise = null; });
+    return warmPromise;
   };
   return provider;
 }
