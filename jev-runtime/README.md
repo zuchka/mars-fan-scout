@@ -37,7 +37,7 @@ JEV_MIN_MARGIN=0.25
 JEV_COMPUTE_USD_PER_HOUR=1.8
 ```
 
-The Sprite requires HTTPS and a bearer token for a remote service. It probes the pinned model and backend at startup; if a Hugging Face endpoint is still cold, review stays available and each response is checked against the pinned identity. Requests can wait up to ten minutes for a scaled-to-zero endpoint to wake. The daily limit caps calls from this app, **not** GPU hosting time. In the export, `cost_usd` estimates request wall time at the configured hourly rate, not the provider bill; the endpoint bill also includes initialization and idle running minutes.
+The Sprite requires HTTPS and a bearer token for a remote service. It probes the pinned model and backend at startup; if a Hugging Face endpoint is still cold, review stays available and each response is checked against the pinned identity. The simple demo caps each hosted call at 45 seconds and identifies an unavailable endpoint; research review retains the longer wake timeout. The daily limit caps calls from this app, **not** GPU hosting time. In the export, `cost_usd` estimates request wall time at the configured hourly rate, not the provider bill; the endpoint bill also includes initialization and idle running minutes.
 
 The example limit of 20 is for a small live demonstration. A full 44-candidate pilot can make two calls per candidate, so raise the daily limit to at least 88 for that run and check the endpoint's actual billing controls. This is a call allowance, not a spending ceiling.
 
