@@ -22,7 +22,7 @@ main{padding:46px 0 28px}
 .intro .eyebrow{display:flex;align-items:center;gap:10px}
 .intro .eyebrow span{display:inline-block;width:28px;height:1px;background:var(--orange);opacity:.7}
 h1,h2,p{margin:0}
-h1{font-size:clamp(44px,5.5vw,82px);line-height:1.02;letter-spacing:-.05em;font-weight:750;margin:15px 0 18px}
+h1{font-size:clamp(44px,5.5vw,82px);line-height:1.02;letter-spacing:-.03em;word-spacing:.08em;font-weight:750;margin:15px 0 18px}
 h1 em{font-style:normal;color:var(--orange)}
 .intro-copy>p{font-size:clamp(16px,1.4vw,19px);color:#b8c3c1;line-height:1.55;max-width:720px}
 .source-note{min-width:250px;display:flex;flex-direction:column;gap:3px;border-left:1px solid #657371;padding:4px 0 2px 22px;color:var(--muted);font-size:13px}
@@ -96,7 +96,6 @@ h1 em{font-style:normal;color:var(--orange)}
 .story-footer{padding:15px 24px;min-height:60px;border-top:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;gap:10px;color:var(--muted);font-size:12px}
 .story-footer button{border:0;background:none;color:var(--orange);padding:5px 0;font-weight:700}
 .story-footer button:hover{text-decoration:underline}
-.caveat{color:#839190;font-size:12px;line-height:1.5;margin:19px 0 0}
 .footer{border-top:1px solid #ffffff20;padding:22px 0 30px;margin-top:28px;display:flex;justify-content:space-between;gap:20px;color:#81908f;font-size:10px;font-weight:800;letter-spacing:.15em}
 .divider{color:var(--orange);padding:0 9px}
 @keyframes scan{from{top:0}to{top:100%}}
