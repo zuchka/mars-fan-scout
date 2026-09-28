@@ -134,7 +134,7 @@ test("hosted Jev calls wait for a scaled-to-zero endpoint", async () => {
         backend: "cuda-bf16", prediction: "Unsure", probabilities: { Fan: .1, "Not a fan": .1, Unsure: .8 } }) };
     },
   });
-  const result = await provider({ evidence: { overlay: Buffer.from("test") } });
+  const result = await provider({ evidence: { overlay: Buffer.from("test") }, timeout_ms: 1234.5 });
   assert.equal(result.prediction, "Unsure");
   assert.equal(headers["x-scale-up-timeout"], "600");
   assert.equal(headers.authorization, "Bearer test-token");

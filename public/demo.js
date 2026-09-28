@@ -144,7 +144,7 @@ function latestRun() { return Object.values(state.session?.runs || {}).at(-1) ||
 function agentResult(id) { return latestRun()?.results?.[id] || null; }
 function verdictInfo(result) {
   if (!result) return { label: "Jev is looking…", className: "" };
-  if (result.status !== "complete") return { label: "No verdict", className: "error" };
+  if (result.status !== "complete") return { label: "Could not finish", className: "error" };
   if (result.verdict === "fan") return { label: "Fan", className: "fan" };
   if (result.verdict === "not_fan") return { label: "Not a fan", className: "not_fan" };
   return { label: "Unsure", className: "unsure" };
@@ -152,7 +152,7 @@ function verdictInfo(result) {
 function renderResults() {
   if (!state.candidates.length) return;
   $("results-area").hidden = false;
-  $("results-count").textContent = `${state.candidates.length} inspected`;
+  $("results-count").textContent = `${state.candidates.length} shapes`;
   const list = $("results-list");
   list.replaceChildren();
   state.candidates.forEach((candidate, index) => {
@@ -180,7 +180,7 @@ async function evidenceImage(sessionId, evidenceId) {
   return url;
 }
 function explanation(result) {
-  if (result.status !== "complete") return "Jev could not finish this check. The source pixels are still visible above.";
+  if (result.status !== "complete") return result.trace?.some(event => event.type === "wider_view_created") ? "Jev asked for a wider view, but the follow-up did not finish." : "Jev could not finish this check. The source pixels are still visible above.";
   const wider = result.trace?.some(event => event.type === "wider_view_created");
   if (result.verdict === "fan") return `${wider ? "Jev asked to see more of the image, then checked again. " : ""}Its Fan answer cleared the confidence threshold.`;
   if (result.verdict === "not_fan") return `${wider ? "Jev asked to see more of the image, then checked again. " : ""}Its Not a fan answer cleared the confidence threshold.`;
@@ -220,13 +220,13 @@ function renderSession() {
   const completed = run ? Object.keys(run.results || {}).length : 0;
   const widerCount = Object.values(run?.results || {}).filter(result => result.trace?.some(event => event.type === "wider_view_created")).length;
   $("roboflow-line").textContent = `Marked ${state.candidates.length} shape${state.candidates.length === 1 ? "" : "s"} for Jev to inspect.`;
-  $("jev-line").textContent = run?.status === "complete" ? `Checked every shape${widerCount ? `; requested a wider view ${widerCount} time${widerCount === 1 ? "" : "s"}` : ""}.` : `Checking marked shapes… ${completed} of ${state.candidates.length} done.`;
+  $("jev-line").textContent = run?.status === "complete" ? `Finished ${state.candidates.length} visual check${state.candidates.length === 1 ? "" : "s"}${widerCount ? `; requested a wider view ${widerCount} time${widerCount === 1 ? "" : "s"}` : ""}.` : `Checking marked shapes… ${completed} of ${state.candidates.length} done.`;
   if (run?.status === "interrupted") {
     error("Jev was interrupted while checking this image. Run the demo again to retry.");
   } else if (run?.status === "complete") {
-    const counts = { fan: 0, not_fan: 0, unsure: 0 };
-    for (const result of Object.values(run.results || {})) counts[result.status === "complete" ? result.verdict : "unsure"]++;
-    $("answer-line").textContent = `${counts.fan} fan · ${counts.not_fan} not a fan · ${counts.unsure} unsure. Select a shape to see what Jev saw.`;
+    const counts = { fan: 0, not_fan: 0, unsure: 0, unfinished: 0 };
+    for (const result of Object.values(run.results || {})) counts[result.status === "complete" ? result.verdict : "unfinished"]++;
+    $("answer-line").textContent = `${counts.fan} fan · ${counts.not_fan} not a fan · ${counts.unsure} unsure${counts.unfinished ? ` · ${counts.unfinished} could not finish` : ""}. Select a shape to see what Jev saw.`;
     $("footer-status").textContent = "Live Roboflow and Jev check complete.";
     $("run-again").hidden = false;
     $("image-input").disabled = false;

@@ -51,7 +51,7 @@ export function makeJevProvider({ url, token = "", imageTokens = null, expectedR
         ...(hostedEndpoint ? { "x-scale-up-timeout": "600" } : {}) },
       body: JSON.stringify({ image_base64: evidence.overlay.toString("base64"), state: STATE,
         question: QUESTION, options: OPTIONS, image_tokens: imageTokens === null ? null : Number(imageTokens) }),
-      signal: AbortSignal.timeout(Math.min(maxCallMs, timeout_ms)),
+      signal: AbortSignal.timeout(Math.max(1, Math.floor(Math.min(maxCallMs, timeout_ms)))),
     });
     if (!response.ok) throw new Error(`Jev service HTTP ${response.status}`);
     const body = await response.json();
