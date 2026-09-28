@@ -257,7 +257,7 @@ function renderSession() {
       $("footer-status").textContent = "Roboflow found the shapes; Jev-Omni is unavailable right now.";
     } else if (counts.unfinished) {
       $("jev-line").textContent = `Jev-Omni checked ${checked - counts.unfinished} of ${checked} regions${runTime}; ${counts.unfinished} could not finish.`;
-      $("footer-status").textContent = `Partial result. ${run.provider_unavailable || "Jev-Omni could not finish every check."} The source pixels remain available.`;
+      $("footer-status").textContent = `Partial result: ${run.provider_unavailable || "Jev-Omni could not finish every check"} — source pixels remain available.`;
       phase("partial");
     } else {
       $("footer-status").textContent = "Live Roboflow and Jev-Omni check complete.";
