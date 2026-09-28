@@ -35,20 +35,23 @@ export function makeJevProvider({ url, token = "", imageTokens = null, expectedR
   expectedBackend = "cuda-bf16",
   computeUsdPerHour = null, fetchImpl = fetch }) {
   const origin = validateServiceUrl(url, token);
+  const hostedEndpoint = new URL(origin).hostname.endsWith(".endpoints.huggingface.cloud");
+  const maxCallMs = hostedEndpoint ? 660000 : 60000;
   if (imageTokens !== null && ![20, 35, 70, 140, 280].includes(Number(imageTokens))) throw new Error("Invalid Jev image token budget");
   const hourly = computeUsdPerHour === null || computeUsdPerHour === "" ? null : Number(computeUsdPerHour);
   if (hourly !== null && (!Number.isFinite(hourly) || hourly < 0)) throw new Error("Invalid Jev compute rate");
   const headers = token ? { authorization: `Bearer ${token}` } : {};
   const metadata = { provider: "Jev-Omni", model: `${MODEL_REPO}@${expectedRevision}`, backend: expectedBackend,
     prompt_version: PROMPT_VERSION, options: OPTIONS, image_tokens: imageTokens === null ? null : Number(imageTokens),
-    compute_usd_per_hour: hourly, cost_basis: hourly === null ? "Compute cost unmeasured; no OpenAI API charge" : "Estimated active inference time only; idle hosting excluded" };
-  const provider = async ({ evidence, timeout_ms = 60000 }) => {
+    compute_usd_per_hour: hourly, cost_basis: hourly === null ? "Compute cost unmeasured; no OpenAI API charge" : "Request wall time times instance rate; not the provider bill" };
+  const provider = async ({ evidence, timeout_ms = maxCallMs }) => {
     const started = performance.now();
     const response = await fetchImpl(`${origin}/classify`, {
-      method: "POST", headers: { ...headers, "content-type": "application/json" },
+      method: "POST", headers: { ...headers, "content-type": "application/json",
+        ...(hostedEndpoint ? { "x-scale-up-timeout": "600" } : {}) },
       body: JSON.stringify({ image_base64: evidence.overlay.toString("base64"), state: STATE,
         question: QUESTION, options: OPTIONS, image_tokens: imageTokens === null ? null : Number(imageTokens) }),
-      signal: AbortSignal.timeout(Math.min(60000, timeout_ms)),
+      signal: AbortSignal.timeout(Math.min(maxCallMs, timeout_ms)),
     });
     if (!response.ok) throw new Error(`Jev service HTTP ${response.status}`);
     const body = await response.json();

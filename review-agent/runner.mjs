@@ -74,7 +74,7 @@ export class ReviewRunner {
     return this.terminal(second.action, trace, started);
   }
   async call(session, run, candidate, evidence, wider, firstAction, trace, started) {
-    const remaining = 130000 - (performance.now() - started);
+    const remaining = 720000 - (performance.now() - started);
     if (remaining <= 0) return null;
     const requestId = randomUUID();
     if (!this.budget.reserve(requestId, `${run.id}:${candidate.id}`)) return null;

@@ -124,6 +124,22 @@ test("Jev provider sends one marked image and verifies the pinned model identity
   assert.equal(result.cost_usd, null);
 });
 
+test("hosted Jev calls wait for a scaled-to-zero endpoint", async () => {
+  let headers;
+  const provider = makeJevProvider({
+    url: "https://example.endpoints.huggingface.cloud", token: "test-token",
+    fetchImpl: async (_url, options) => {
+      headers = options.headers;
+      return { ok: true, json: async () => ({ model_repo: MODEL_REPO, model_revision: MODEL_REVISION,
+        backend: "cuda-bf16", prediction: "Unsure", probabilities: { Fan: .1, "Not a fan": .1, Unsure: .8 } }) };
+    },
+  });
+  const result = await provider({ evidence: { overlay: Buffer.from("test") } });
+  assert.equal(result.prediction, "Unsure");
+  assert.equal(headers["x-scale-up-timeout"], "600");
+  assert.equal(headers.authorization, "Bearer test-token");
+});
+
 test("Jev scores produce three explicit verdicts and conservative wider-view requests", () => {
   const notFan = { prediction: "Not a fan", probabilities: { Fan: .02, "Not a fan": .95, Unsure: .03 } };
   const fan = { prediction: "Fan", probabilities: { Fan: .93, "Not a fan": .03, Unsure: .04 } };

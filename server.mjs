@@ -58,7 +58,10 @@ if (process.env.REVIEW_AGENT_ENABLED === "1" && process.env.JEV_SERVICE_URL) {
     computeUsdPerHour: process.env.JEV_COMPUTE_USD_PER_HOUR || null,
   });
   try { await candidateProvider.probe(); reviewProvider = candidateProvider; }
-  catch (error) { console.error("Jev service unavailable:", error.message); }
+  catch (error) {
+    console.error("Jev service unavailable at startup:", error.message);
+    if (new URL(process.env.JEV_SERVICE_URL).hostname.endsWith(".endpoints.huggingface.cloud")) reviewProvider = candidateProvider;
+  }
 }
 const reviewRunner = new ReviewRunner({ store: reviewStore, budget: reviewBudget, provider: reviewProvider,
   policy: { minProbability: Number(process.env.JEV_MIN_PROBABILITY || 0.8), minMargin: Number(process.env.JEV_MIN_MARGIN || 0.25) } });
