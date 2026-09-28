@@ -25,16 +25,18 @@ function status(message, kind = "") {
 function phase(name) {
   state.phase = name;
   const order = ["roboflow", "jev", "done"];
+  const step = name === "partial" ? "done" : name;
   for (const [index, id] of ["roboflow-step", "jev-step", "answer-step"].entries()) {
     const node = $(id);
-    node.classList.toggle("active", order[index] === name);
-    node.classList.toggle("done", order.indexOf(name) > index);
+    node.classList.toggle("active", order[index] === step);
+    node.classList.toggle("done", order.indexOf(step) > index);
   }
   $("image-scan").hidden = name !== "roboflow";
-  $("run-light").textContent = name === "done" ? "COMPLETE" : name === "roboflow" ? "SCANNING" : name === "jev" ? "JEV IS LOOKING" : name === "error" ? "NEEDS RETRY" : "WAITING";
-  $("run-light").className = "run-light" + (name === "done" ? " done" : ["roboflow", "jev"].includes(name) ? " active" : "");
+  $("run-light").textContent = name === "done" ? "COMPLETE" : name === "partial" ? "PARTIAL" : name === "roboflow" ? "SCANNING" : name === "jev" ? "JEV IS LOOKING" : name === "error" ? "NEEDS RETRY" : "WAITING";
+  $("run-light").className = "run-light" + (name === "done" ? " done" : ["roboflow", "jev", "partial"].includes(name) ? " active" : "");
   if (["roboflow", "jev"].includes(name)) status("Live models working", "busy");
   else if (name === "done") status("Live run complete", "ready");
+  else if (name === "partial") status("Some checks could not finish");
   else if (name === "error") status("Run interrupted");
   else if (name === "locked") status("Meeting code needed");
 }
@@ -253,6 +255,10 @@ function renderSession() {
     if (counts.unfinished === checked) {
       error(run.provider_unavailable || "Jev-Omni could not complete the visual checks. The GPU endpoint may be unavailable.");
       $("footer-status").textContent = "Roboflow found the shapes; Jev-Omni is unavailable right now.";
+    } else if (counts.unfinished) {
+      $("jev-line").textContent = `Jev-Omni checked ${checked - counts.unfinished} of ${checked} regions${runTime}; ${counts.unfinished} could not finish.`;
+      $("footer-status").textContent = `Partial result. ${run.provider_unavailable || "Jev-Omni could not finish every check."} The source pixels remain available.`;
+      phase("partial");
     } else {
       $("footer-status").textContent = "Live Roboflow and Jev-Omni check complete.";
       phase("done");
