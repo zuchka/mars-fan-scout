@@ -1,6 +1,8 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { predictionsFromRoboflow, showcaseCandidates } from "../public/candidates.js";
+import sharp from "sharp";
 
 const modelId = process.argv[2];
 if (!/^[A-Za-z0-9_-]+\/[A-Za-z0-9_-]+$/.test(modelId || "")) throw new Error("Pass the trained workspace/model ID");
@@ -29,10 +31,17 @@ for (const item of imageFiles) {
     body: image.toString("base64"), signal: AbortSignal.timeout(60000) });
   if (!response.ok) throw new Error(`${item.id}: Roboflow HTTP ${response.status}`);
   const body = await response.json();
+  const requestMs = Math.round(performance.now() - started);
   await writeFile(new URL(`${item.id}.json`, outputDir), JSON.stringify(body, null, 2) + "\n");
   const info = { width: Number(body.image?.width) || 1024, height: Number(body.image?.height) || 1024 };
   const proposals = predictionsFromRoboflow(body, info);
   const featured = showcaseCandidates(proposals, info);
+  const boxes = featured.map((candidate, index) => {
+    const { left, top, right, bottom } = candidate.bounds;
+    return `<rect x="${left}" y="${top}" width="${right - left}" height="${bottom - top}" fill="none" stroke="#ff704a" stroke-width="3"/><text x="${Math.max(8, left)}" y="${Math.max(25, top - 6)}" fill="#ff704a" font-size="24" font-family="sans-serif" font-weight="bold">${index + 1}</text>`;
+  }).join("");
+  const svg = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${info.width}" height="${info.height}">${boxes}</svg>`);
+  await sharp(image).composite([{ input: svg }]).jpeg({ quality: 90 }).toFile(fileURLToPath(new URL(`${item.id}.featured.jpg`, outputDir)));
   const review = marks.crops.find(row => row.id === item.id);
   const near = candidate => review?.points_px.some(([x, y]) => {
     const centerX = (candidate.bounds.left + candidate.bounds.right) / 2;
@@ -44,7 +53,7 @@ for (const item of imageFiles) {
     const centerY = (candidate.bounds.top + candidate.bounds.bottom) / 2;
     return Math.hypot(x - centerX, y - centerY) <= 75;
   })).length ?? null;
-  rows.push({ id: item.id, request_ms: Math.round(performance.now() - started), raw_count: body.predictions?.length || 0,
+  rows.push({ id: item.id, request_ms: requestMs, raw_count: body.predictions?.length || 0,
     deduplicated_count: proposals.length, featured_count: featured.length,
     featured_near_clear_mark: review ? featured.filter(near).length : null,
     clear_marks_total: review?.points_px.length ?? null,

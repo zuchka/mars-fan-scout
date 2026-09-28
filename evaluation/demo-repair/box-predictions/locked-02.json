@@ -1,0 +1,106 @@
+{
+  "inference_id": "54abf8ec-860a-49b5-af45-416ae138280d",
+  "time": 0.01300009898841381,
+  "resolved_model": {
+    "model_id": "matt-abrams/mars-fan-box-proposals-1-rfdetr-small-t1",
+    "model_package_id": "a44d78082c87b74e4b0d3bbb6a71e284",
+    "backend": "trt",
+    "quantization": "fp16"
+  },
+  "image": {
+    "width": 1024,
+    "height": 1024
+  },
+  "predictions": [
+    {
+      "x": 645,
+      "y": 432,
+      "width": 76,
+      "height": 114,
+      "confidence": 0.41004738211631775,
+      "class": "fan",
+      "class_id": 0,
+      "detection_id": "69da4554-c581-478e-abac-6f95fb52c6ad"
+    },
+    {
+      "x": 963,
+      "y": 573.5,
+      "width": 48,
+      "height": 67,
+      "confidence": 0.34953272342681885,
+      "class": "fan",
+      "class_id": 0,
+      "detection_id": "61120d38-a5f1-41fa-aa7c-25371f6daf2a"
+    },
+    {
+      "x": 833.5,
+      "y": 573,
+      "width": 57,
+      "height": 80,
+      "confidence": 0.3223126530647278,
+      "class": "fan",
+      "class_id": 0,
+      "detection_id": "866ede79-63e5-45d4-849d-0382d9ffc2db"
+    },
+    {
+      "x": 862.5,
+      "y": 73,
+      "width": 109,
+      "height": 112,
+      "confidence": 0.26664361357688904,
+      "class": "fan",
+      "class_id": 0,
+      "detection_id": "0563aca5-3481-4dc0-bd9b-9e53dccbbc17"
+    },
+    {
+      "x": 368,
+      "y": 309,
+      "width": 38,
+      "height": 12,
+      "confidence": 0.23283305764198303,
+      "class": "fan",
+      "class_id": 0,
+      "detection_id": "44108f6a-aef2-4c76-b766-4109584b98b3"
+    },
+    {
+      "x": 818,
+      "y": 574,
+      "width": 90,
+      "height": 82,
+      "confidence": 0.23196201026439667,
+      "class": "fan",
+      "class_id": 0,
+      "detection_id": "9593ca3d-2c94-4503-b2d3-ef13a39e0693"
+    },
+    {
+      "x": 527.5,
+      "y": 562,
+      "width": 21,
+      "height": 10,
+      "confidence": 0.20212802290916443,
+      "class": "fan",
+      "class_id": 0,
+      "detection_id": "790c6216-5345-4663-8738-20b3a0eae8f6"
+    },
+    {
+      "x": 396,
+      "y": 261.5,
+      "width": 22,
+      "height": 13,
+      "confidence": 0.20149880647659302,
+      "class": "fan",
+      "class_id": 0,
+      "detection_id": "c83ec78b-9f56-4e24-b38d-7b954cea0e7c"
+    },
+    {
+      "x": 811,
+      "y": 596,
+      "width": 66,
+      "height": 34,
+      "confidence": 0.20149880647659302,
+      "class": "fan",
+      "class_id": 0,
+      "detection_id": "070e05af-8c96-49f1-8e7c-9d94d3cce4f4"
+    }
+  ]
+}

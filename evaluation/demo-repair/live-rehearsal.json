@@ -1,0 +1,68 @@
+{
+  "date_utc": "2026-09-28",
+  "deployment_commit": "f353d3e",
+  "page": "https://mars.zuchka.dev/",
+  "model": "matt-abrams/mars-polar-fan-masks-1-rfdetr-seg-small-t1",
+  "jev_backend": "cuda-bf16",
+  "method": "Five consecutive browser Run again actions on the public site with the Hugging Face A100 endpoint already warm. Each run made a new Roboflow request. Server-side timings exclude browser network/rendering. The browser held a review request open until Sprite completed.",
+  "runs": [
+    {
+      "session_id": "c328d926-a4c1-4252-89ee-4f1922b7c3c6",
+      "roboflow_request_ms": 1035,
+      "retained_proposals": 22,
+      "jev_run_ms": 797,
+      "first_jev_result_ms": 568,
+      "jev_calls": 4,
+      "wider_checks": 1,
+      "completed": 3,
+      "errors": 0
+    },
+    {
+      "session_id": "6f4cef39-48dc-4d21-88ba-8ee25a996bc6",
+      "roboflow_request_ms": 682,
+      "retained_proposals": 22,
+      "jev_run_ms": 1047,
+      "first_jev_result_ms": 405,
+      "jev_calls": 4,
+      "wider_checks": 1,
+      "completed": 3,
+      "errors": 0
+    },
+    {
+      "session_id": "c01ca12c-0bb5-449a-a303-c1cebeb68906",
+      "roboflow_request_ms": 714,
+      "retained_proposals": 22,
+      "jev_run_ms": 1190,
+      "first_jev_result_ms": 556,
+      "jev_calls": 4,
+      "wider_checks": 1,
+      "completed": 3,
+      "errors": 0
+    },
+    {
+      "session_id": "a89d0abd-9e36-4937-a350-6463161d93b0",
+      "roboflow_request_ms": 1143,
+      "retained_proposals": 22,
+      "jev_run_ms": 1137,
+      "first_jev_result_ms": 559,
+      "jev_calls": 4,
+      "wider_checks": 1,
+      "completed": 3,
+      "errors": 0
+    },
+    {
+      "session_id": "ebe0e755-8f08-4f4a-99c9-1b78ecef78dc",
+      "roboflow_request_ms": 1878,
+      "retained_proposals": 22,
+      "jev_run_ms": 1201,
+      "first_jev_result_ms": 603,
+      "jev_calls": 4,
+      "wider_checks": 1,
+      "completed": 3,
+      "errors": 0
+    }
+  ],
+  "result": "5/5 runs completed. Three-region Jev stage took 0.8–1.2 s and first Jev result 0.4–0.6 s. All three labels were Fan in each run; this is not evidence of accuracy.",
+  "before_fix": "Two earlier live runs without the held request took 27.9 and 32.5 s for the three-region Jev stage. A diagnostic with repeated status requests took 8.5 s.",
+  "cost_note": "The A100 is charged by instance running time at the configured $2.50/hour until scale-to-zero; per-request compute estimates in session traces are not the Hugging Face invoice."
+}

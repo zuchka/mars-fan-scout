@@ -27,6 +27,14 @@ test("tiny marks never displace a plausible lower-confidence region", () => {
   assert.deepEqual(showcaseCandidates(proposals, image).map(item => item.sourceIndex), [1]);
 });
 
+test("a sparse crop shows two substantial candidates instead of filling a third slot with a speck", async () => {
+  const response = JSON.parse(await readFile(new URL("../evaluation/locked/predictions/locked-04.json", import.meta.url)));
+  const image = { width: 1024, height: 1024 };
+  const proposals = predictionsFromRoboflow(response, image);
+  assert.deepEqual(showcaseCandidates(proposals, image).map(item => item.sourceIndex), [0, 1]);
+  assert.ok(proposals.some(item => item.area < 200));
+});
+
 test("box detector predictions become inspectable region polygons", () => {
   const items = predictionsFromRoboflow({ image: { width: 1024, height: 1024 }, predictions: [
     { x: 500, y: 400, width: 80, height: 120, confidence: .7 },

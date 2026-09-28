@@ -241,6 +241,7 @@ const server = createServer(async (request, response) => {
           while (["queued", "running"].includes(run.status) && Date.now() < deadline && !response.destroyed) {
             await new Promise(resolve => setTimeout(resolve, 250));
           }
+          if (response.destroyed) return;
         }
         return run ? send(response, 200, reviewRunner.publicRun(session, run)) : send(response, 404, { error: "Unknown agent run" });
       }

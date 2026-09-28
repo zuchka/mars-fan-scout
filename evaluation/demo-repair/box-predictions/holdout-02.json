@@ -1,0 +1,786 @@
+{
+  "inference_id": "c2a4109c-7d04-4916-a8e8-faa3dc450d91",
+  "time": 0.01397024281322956,
+  "resolved_model": {
+    "model_id": "matt-abrams/mars-fan-box-proposals-1-rfdetr-small-t1",
+    "model_package_id": "a44d78082c87b74e4b0d3bbb6a71e284",
+    "backend": "trt",
+    "quantization": "fp16"
+  },
+  "image": {
+    "width": 1024,
+    "height": 1024
+  },
+  "predictions": [
+    {
+      "x": 298,
+      "y": 885,
+      "width": 110,
+      "height": 70,
+      "confidence": 0.4353013038635254,
+      "class": "fan",
+      "class_id": 0,
+      "detection_id": "9e16aafd-98cd-4ed4-934c-5ecb3d5a8968"
+    },
+    {
+      "x": 285.5,
+      "y": 344.5,
+      "width": 67,
+      "height": 27,
+      "confidence": 0.41430631279945374,
+      "class": "fan",
+      "class_id": 0,
+      "detection_id": "73295524-413c-43f1-8a5e-9073ef619345"
+    },
+    {
+      "x": 372,
+      "y": 329,
+      "width": 40,
+      "height": 24,
+      "confidence": 0.398640513420105,
+      "class": "fan",
+      "class_id": 0,
+      "detection_id": "a2d3b5d3-e5ef-479e-b7d8-26384691e4b0"
+    },
+    {
+      "x": 458.5,
+      "y": 307.5,
+      "width": 45,
+      "height": 35,
+      "confidence": 0.3774259090423584,
+      "class": "fan",
+      "class_id": 0,
+      "detection_id": "c3b1deab-a04f-43df-8351-2a1fb599f547"
+    },
+    {
+      "x": 792.5,
+      "y": 436.5,
+      "width": 99,
+      "height": 53,
+      "confidence": 0.3689739406108856,
+      "class": "fan",
+      "class_id": 0,
+      "detection_id": "9cc1f9da-f5d8-4647-8b08-0ae342aba4cc"
+    },
+    {
+      "x": 914.5,
+      "y": 293,
+      "width": 71,
+      "height": 32,
+      "confidence": 0.36624962091445923,
+      "class": "fan",
+      "class_id": 0,
+      "detection_id": "517b546b-47a5-4f94-b6f9-c128742d7dc7"
+    },
+    {
+      "x": 222.5,
+      "y": 538.5,
+      "width": 133,
+      "height": 53,
+      "confidence": 0.3652302324771881,
+      "class": "fan",
+      "class_id": 0,
+      "detection_id": "704d47a2-bb6e-4372-9096-cd199e6d1d1a"
+    },
+    {
+      "x": 858.5,
+      "y": 396.5,
+      "width": 31,
+      "height": 55,
+      "confidence": 0.35242462158203125,
+      "class": "fan",
+      "class_id": 0,
+      "detection_id": "749d7c25-bb9f-4734-bf6f-345c8f0d40a0"
+    },
+    {
+      "x": 821.5,
+      "y": 711,
+      "width": 71,
+      "height": 44,
+      "confidence": 0.3473156988620758,
+      "class": "fan",
+      "class_id": 0,
+      "detection_id": "f4a50fc8-43d7-42fc-97c2-b235623915ca"
+    },
+    {
+      "x": 219,
+      "y": 326,
+      "width": 48,
+      "height": 16,
+      "confidence": 0.32018324732780457,
+      "class": "fan",
+      "class_id": 0,
+      "detection_id": "c3f1892d-6085-4534-92a5-95725db19ff4"
+    },
+    {
+      "x": 616,
+      "y": 538,
+      "width": 28,
+      "height": 20,
+      "confidence": 0.316791832447052,
+      "class": "fan",
+      "class_id": 0,
+      "detection_id": "33003223-7797-4f31-8871-b1029f9d606f"
+    },
+    {
+      "x": 872,
+      "y": 454,
+      "width": 30,
+      "height": 24,
+      "confidence": 0.31510335206985474,
+      "class": "fan",
+      "class_id": 0,
+      "detection_id": "a08e973d-0a54-4b64-8675-09fc8c5f584c"
+    },
+    {
+      "x": 795,
+      "y": 444,
+      "width": 110,
+      "height": 74,
+      "confidence": 0.302906334400177,
+      "class": "fan",
+      "class_id": 0,
+      "detection_id": "06d37931-40a5-4d47-9f9b-bb14f8283fb9"
+    },
+    {
+      "x": 593,
+      "y": 208,
+      "width": 54,
+      "height": 28,
+      "confidence": 0.30239108204841614,
+      "class": "fan",
+      "class_id": 0,
+      "detection_id": "8857590f-8e27-457d-b7e2-3a51a1eff0c8"
+    },
+    {
+      "x": 229,
+      "y": 890,
+      "width": 56,
+      "height": 30,
+      "confidence": 0.2952299118041992,
+      "class": "fan",
+      "class_id": 0,
+      "detection_id": "5ba311d1-c63c-4d49-ba7d-3f0da23e78dd"
+    },
+    {
+      "x": 932.5,
+      "y": 211.5,
+      "width": 67,
+      "height": 37,
+      "confidence": 0.29512834548950195,
+      "class": "fan",
+      "class_id": 0,
+      "detection_id": "0018db70-2746-4e59-9a31-7abf4fce0745"
+    },
+    {
+      "x": 484,
+      "y": 313.5,
+      "width": 98,
+      "height": 47,
+      "confidence": 0.2940122187137604,
+      "class": "fan",
+      "class_id": 0,
+      "detection_id": "674d2af0-62b0-48e4-aa11-496444fc8d31"
+    },
+    {
+      "x": 705.5,
+      "y": 510,
+      "width": 25,
+      "height": 16,
+      "confidence": 0.29209020733833313,
+      "class": "fan",
+      "class_id": 0,
+      "detection_id": "75942b95-033a-41fe-a81c-1f2e5abfbf7c"
+    },
+    {
+      "x": 105,
+      "y": 271.5,
+      "width": 94,
+      "height": 41,
+      "confidence": 0.2886693477630615,
+      "class": "fan",
+      "class_id": 0,
+      "detection_id": "aeacdcff-cc4a-4a25-b3b1-a2ddf18ca9ed"
+    },
+    {
+      "x": 394,
+      "y": 940,
+      "width": 26,
+      "height": 30,
+      "confidence": 0.2870677709579468,
+      "class": "fan",
+      "class_id": 0,
+      "detection_id": "010c43c6-ac20-46ea-baf9-a588728f55e8"
+    },
+    {
+      "x": 327.5,
+      "y": 559,
+      "width": 35,
+      "height": 18,
+      "confidence": 0.2829881012439728,
+      "class": "fan",
+      "class_id": 0,
+      "detection_id": "dac70758-0cbd-415c-ac71-8c29c9fd0929"
+    },
+    {
+      "x": 58.5,
+      "y": 263,
+      "width": 117,
+      "height": 34,
+      "confidence": 0.2808135449886322,
+      "class": "fan",
+      "class_id": 0,
+      "detection_id": "b3477ae4-b372-4e77-baf8-699f31daec16"
+    },
+    {
+      "x": 943,
+      "y": 652.5,
+      "width": 160,
+      "height": 77,
+      "confidence": 0.27904197573661804,
+      "class": "fan",
+      "class_id": 0,
+      "detection_id": "7956afe1-d965-4199-855d-a6a79e0c1c22"
+    },
+    {
+      "x": 409,
+      "y": 582.5,
+      "width": 116,
+      "height": 57,
+      "confidence": 0.2753245234489441,
+      "class": "fan",
+      "class_id": 0,
+      "detection_id": "47af9908-5c58-4a0c-8979-6c2f1ae70e17"
+    },
+    {
+      "x": 438.5,
+      "y": 105.5,
+      "width": 55,
+      "height": 45,
+      "confidence": 0.2727019190788269,
+      "class": "fan",
+      "class_id": 0,
+      "detection_id": "b0ee9805-68a5-4781-b86a-4df8e5623442"
+    },
+    {
+      "x": 519,
+      "y": 327.5,
+      "width": 26,
+      "height": 17,
+      "confidence": 0.2715413570404053,
+      "class": "fan",
+      "class_id": 0,
+      "detection_id": "931e036f-db1f-4126-95fd-29058057468d"
+    },
+    {
+      "x": 704.5,
+      "y": 581.5,
+      "width": 45,
+      "height": 21,
+      "confidence": 0.2689414322376251,
+      "class": "fan",
+      "class_id": 0,
+      "detection_id": "04adb6a7-7dbe-478b-be0a-26b8a483daa9"
+    },
+    {
+      "x": 337.5,
+      "y": 908,
+      "width": 31,
+      "height": 24,
+      "confidence": 0.26779094338417053,
+      "class": "fan",
+      "class_id": 0,
+      "detection_id": "5beb8d3a-b920-4695-9d27-b638cd0a9a78"
+    },
+    {
+      "x": 484,
+      "y": 750,
+      "width": 38,
+      "height": 24,
+      "confidence": 0.26721689105033875,
+      "class": "fan",
+      "class_id": 0,
+      "detection_id": "92dcfff7-e33f-4362-a779-0cc84463a57a"
+    },
+    {
+      "x": 690.5,
+      "y": 486.5,
+      "width": 41,
+      "height": 21,
+      "confidence": 0.26721689105033875,
+      "class": "fan",
+      "class_id": 0,
+      "detection_id": "4731ed5e-585d-45c1-a0df-221e2cb63505"
+    },
+    {
+      "x": 128.5,
+      "y": 829,
+      "width": 19,
+      "height": 24,
+      "confidence": 0.26549941301345825,
+      "class": "fan",
+      "class_id": 0,
+      "detection_id": "50c26e93-c0f9-46da-8303-9042f3dbb07f"
+    },
+    {
+      "x": 507.5,
+      "y": 454,
+      "width": 31,
+      "height": 16,
+      "confidence": 0.2635994255542755,
+      "class": "fan",
+      "class_id": 0,
+      "detection_id": "c6fbaf23-126a-49a5-a5a2-4a06d3efc6e0"
+    },
+    {
+      "x": 269,
+      "y": 257.5,
+      "width": 22,
+      "height": 17,
+      "confidence": 0.26340988278388977,
+      "class": "fan",
+      "class_id": 0,
+      "detection_id": "d6a7696e-3658-48a4-8dd0-c09f7915b153"
+    },
+    {
+      "x": 370,
+      "y": 563,
+      "width": 38,
+      "height": 18,
+      "confidence": 0.26303109526634216,
+      "class": "fan",
+      "class_id": 0,
+      "detection_id": "30c14086-2aee-4e63-b407-61f8ce644f5a"
+    },
+    {
+      "x": 859,
+      "y": 562,
+      "width": 40,
+      "height": 24,
+      "confidence": 0.2549724578857422,
+      "class": "fan",
+      "class_id": 0,
+      "detection_id": "ad33f46f-ab35-4a77-be63-1d860d96f4ad"
+    },
+    {
+      "x": 104.5,
+      "y": 668.5,
+      "width": 69,
+      "height": 23,
+      "confidence": 0.2544163167476654,
+      "class": "fan",
+      "class_id": 0,
+      "detection_id": "bd0eb81a-3dbc-433f-886e-093c86b5d449"
+    },
+    {
+      "x": 49,
+      "y": 231.5,
+      "width": 22,
+      "height": 17,
+      "confidence": 0.25275275111198425,
+      "class": "fan",
+      "class_id": 0,
+      "detection_id": "cb53d279-58ea-4e5c-b74b-5fe9742dd533"
+    },
+    {
+      "x": 627.5,
+      "y": 618.5,
+      "width": 49,
+      "height": 43,
+      "confidence": 0.2525683641433716,
+      "class": "fan",
+      "class_id": 0,
+      "detection_id": "d248a4ca-b260-4a75-b99f-7ecdcf7adf34"
+    },
+    {
+      "x": 825,
+      "y": 863.5,
+      "width": 28,
+      "height": 21,
+      "confidence": 0.25183168053627014,
+      "class": "fan",
+      "class_id": 0,
+      "detection_id": "db28a49d-af82-4d7e-9c10-d320694ca881"
+    },
+    {
+      "x": 440.5,
+      "y": 594.5,
+      "width": 51,
+      "height": 31,
+      "confidence": 0.250545859336853,
+      "class": "fan",
+      "class_id": 0,
+      "detection_id": "2314802b-48bc-46c9-af08-445fd89b1576"
+    },
+    {
+      "x": 86,
+      "y": 265.5,
+      "width": 52,
+      "height": 23,
+      "confidence": 0.24981309473514557,
+      "class": "fan",
+      "class_id": 0,
+      "detection_id": "b137dda9-0f57-4d85-90d5-c22767799310"
+    },
+    {
+      "x": 631.5,
+      "y": 413.5,
+      "width": 25,
+      "height": 23,
+      "confidence": 0.24944725632667542,
+      "class": "fan",
+      "class_id": 0,
+      "detection_id": "9a89ae52-880f-4e36-95a4-8f0caca33a2a"
+    },
+    {
+      "x": 831.5,
+      "y": 466.5,
+      "width": 41,
+      "height": 31,
+      "confidence": 0.2458084672689438,
+      "class": "fan",
+      "class_id": 0,
+      "detection_id": "07ed4ccb-820a-4be8-b0a9-dc4c7271998c"
+    },
+    {
+      "x": 556.5,
+      "y": 794,
+      "width": 57,
+      "height": 46,
+      "confidence": 0.24436300992965698,
+      "class": "fan",
+      "class_id": 0,
+      "detection_id": "e7808c71-f079-4a11-9e4e-c0460ec9a2c0"
+    },
+    {
+      "x": 837.5,
+      "y": 815.5,
+      "width": 27,
+      "height": 21,
+      "confidence": 0.2436424344778061,
+      "class": "fan",
+      "class_id": 0,
+      "detection_id": "3a361285-8453-43aa-81e8-98f042a440c4"
+    },
+    {
+      "x": 73,
+      "y": 652.5,
+      "width": 130,
+      "height": 55,
+      "confidence": 0.24346251785755157,
+      "class": "fan",
+      "class_id": 0,
+      "detection_id": "59b768bb-1e2f-4a87-a1ff-0d02cf1246fe"
+    },
+    {
+      "x": 687,
+      "y": 455,
+      "width": 20,
+      "height": 14,
+      "confidence": 0.24310296773910522,
+      "class": "fan",
+      "class_id": 0,
+      "detection_id": "c824a10f-82a5-462d-b450-490159a328eb"
+    },
+    {
+      "x": 657,
+      "y": 829,
+      "width": 58,
+      "height": 20,
+      "confidence": 0.24256430566310883,
+      "class": "fan",
+      "class_id": 0,
+      "detection_id": "8330091d-f2c9-44eb-96e6-b358586e6fcd"
+    },
+    {
+      "x": 898.5,
+      "y": 594,
+      "width": 41,
+      "height": 38,
+      "confidence": 0.24131056666374207,
+      "class": "fan",
+      "class_id": 0,
+      "detection_id": "e2bcc831-23cc-4ffe-8a53-02ddd4f5fcce"
+    },
+    {
+      "x": 946,
+      "y": 504.5,
+      "width": 24,
+      "height": 17,
+      "confidence": 0.2404177486896515,
+      "class": "fan",
+      "class_id": 0,
+      "detection_id": "d8f99d86-46dc-4c75-b112-5cc193038e7f"
+    },
+    {
+      "x": 1010.5,
+      "y": 255,
+      "width": 27,
+      "height": 34,
+      "confidence": 0.2404177486896515,
+      "class": "fan",
+      "class_id": 0,
+      "detection_id": "a4627f49-a9c5-4ef4-85fd-6602f9a42e57"
+    },
+    {
+      "x": 193.5,
+      "y": 533.5,
+      "width": 71,
+      "height": 39,
+      "confidence": 0.23934932053089142,
+      "class": "fan",
+      "class_id": 0,
+      "detection_id": "8b014a46-e0e7-4f64-a3fe-4a7ee00ff33d"
+    },
+    {
+      "x": 569,
+      "y": 804.5,
+      "width": 30,
+      "height": 21,
+      "confidence": 0.23846149444580078,
+      "class": "fan",
+      "class_id": 0,
+      "detection_id": "0c5c1b64-ced5-4cb4-9cf5-0c1f20e89579"
+    },
+    {
+      "x": 425.5,
+      "y": 591,
+      "width": 83,
+      "height": 40,
+      "confidence": 0.23353151977062225,
+      "class": "fan",
+      "class_id": 0,
+      "detection_id": "131177d0-e937-4d42-8e0a-1d0504c8f693"
+    },
+    {
+      "x": 636.5,
+      "y": 626,
+      "width": 29,
+      "height": 28,
+      "confidence": 0.23231014609336853,
+      "class": "fan",
+      "class_id": 0,
+      "detection_id": "8dc73e7a-009b-4b96-8f79-7f27a51eb99a"
+    },
+    {
+      "x": 782.5,
+      "y": 590.5,
+      "width": 23,
+      "height": 15,
+      "confidence": 0.23196201026439667,
+      "class": "fan",
+      "class_id": 0,
+      "detection_id": "c2c19f5e-5f6d-4cfd-a2ba-ce51691c2878"
+    },
+    {
+      "x": 783,
+      "y": 128.5,
+      "width": 30,
+      "height": 21,
+      "confidence": 0.22919000685214996,
+      "class": "fan",
+      "class_id": 0,
+      "detection_id": "81965654-3e42-4a2f-8991-5d24e760b6c3"
+    },
+    {
+      "x": 25,
+      "y": 258,
+      "width": 50,
+      "height": 22,
+      "confidence": 0.22884514927864075,
+      "class": "fan",
+      "class_id": 0,
+      "detection_id": "a0c68106-4e80-49af-b958-447767e76bed"
+    },
+    {
+      "x": 392,
+      "y": 377.5,
+      "width": 20,
+      "height": 15,
+      "confidence": 0.22798456251621246,
+      "class": "fan",
+      "class_id": 0,
+      "detection_id": "7f51cec4-67ef-473e-a9cd-b0c4f2bf8f95"
+    },
+    {
+      "x": 672.5,
+      "y": 828,
+      "width": 25,
+      "height": 18,
+      "confidence": 0.2267836332321167,
+      "class": "fan",
+      "class_id": 0,
+      "detection_id": "fefee896-7b32-403c-a93d-354f42167be2"
+    },
+    {
+      "x": 294,
+      "y": 645,
+      "width": 60,
+      "height": 24,
+      "confidence": 0.22541658580303192,
+      "class": "fan",
+      "class_id": 0,
+      "detection_id": "99f0024d-5c21-4f4b-ae5e-6d38b2372947"
+    },
+    {
+      "x": 827,
+      "y": 463,
+      "width": 32,
+      "height": 24,
+      "confidence": 0.2252461463212967,
+      "class": "fan",
+      "class_id": 0,
+      "detection_id": "3a8685b9-872e-4ae7-a861-98e7a40d002b"
+    },
+    {
+      "x": 264.5,
+      "y": 552.5,
+      "width": 47,
+      "height": 25,
+      "confidence": 0.224735289812088,
+      "class": "fan",
+      "class_id": 0,
+      "detection_id": "1b150bc5-a632-41b7-8524-d4c3a22f3a6b"
+    },
+    {
+      "x": 817,
+      "y": 541.5,
+      "width": 34,
+      "height": 19,
+      "confidence": 0.2242252677679062,
+      "class": "fan",
+      "class_id": 0,
+      "detection_id": "c37b3210-fd6c-470a-b9f4-8b3e8f9ecfb3"
+    },
+    {
+      "x": 426.5,
+      "y": 637,
+      "width": 43,
+      "height": 34,
+      "confidence": 0.22101424634456635,
+      "class": "fan",
+      "class_id": 0,
+      "detection_id": "87962b7d-2ebb-427e-87b9-38960d44c5b7"
+    },
+    {
+      "x": 702.5,
+      "y": 614.5,
+      "width": 21,
+      "height": 17,
+      "confidence": 0.22017472982406616,
+      "class": "fan",
+      "class_id": 0,
+      "detection_id": "b049987d-fb0c-4eb1-b819-f093efa13f7e"
+    },
+    {
+      "x": 153.5,
+      "y": 775.5,
+      "width": 33,
+      "height": 13,
+      "confidence": 0.21700547635555267,
+      "class": "fan",
+      "class_id": 0,
+      "detection_id": "6a591f00-b057-4a72-9d62-931cefb8ee27"
+    },
+    {
+      "x": 131.5,
+      "y": 279.5,
+      "width": 39,
+      "height": 25,
+      "confidence": 0.2137051820755005,
+      "class": "fan",
+      "class_id": 0,
+      "detection_id": "7aa9a77f-672d-4167-ac5a-ea86452caf64"
+    },
+    {
+      "x": 12,
+      "y": 762.5,
+      "width": 24,
+      "height": 35,
+      "confidence": 0.21190567314624786,
+      "class": "fan",
+      "class_id": 0,
+      "detection_id": "839829a3-2889-4f17-b26d-22a9fbbd4aae"
+    },
+    {
+      "x": 909,
+      "y": 474.5,
+      "width": 20,
+      "height": 33,
+      "confidence": 0.21044160425662994,
+      "class": "fan",
+      "class_id": 0,
+      "detection_id": "73911f77-7772-47d5-9c5c-870f5283e9ae"
+    },
+    {
+      "x": 849,
+      "y": 461,
+      "width": 78,
+      "height": 40,
+      "confidence": 0.21011726558208466,
+      "class": "fan",
+      "class_id": 0,
+      "detection_id": "e6fadf1d-314d-4465-82c0-1649d538ff0d"
+    },
+    {
+      "x": 696,
+      "y": 482,
+      "width": 48,
+      "height": 24,
+      "confidence": 0.2078571617603302,
+      "class": "fan",
+      "class_id": 0,
+      "detection_id": "fcf97a6a-6683-429c-8217-83c822b6e9ab"
+    },
+    {
+      "x": 400,
+      "y": 578.5,
+      "width": 32,
+      "height": 15,
+      "confidence": 0.2067338526248932,
+      "class": "fan",
+      "class_id": 0,
+      "detection_id": "dec9c2d8-6e66-412b-b374-a8ee04c787be"
+    },
+    {
+      "x": 881,
+      "y": 832,
+      "width": 36,
+      "height": 22,
+      "confidence": 0.20641373097896576,
+      "class": "fan",
+      "class_id": 0,
+      "detection_id": "028f0180-57f8-432e-be04-dd43825d0acf"
+    },
+    {
+      "x": 310.5,
+      "y": 498.5,
+      "width": 33,
+      "height": 25,
+      "confidence": 0.20529620349407196,
+      "class": "fan",
+      "class_id": 0,
+      "detection_id": "f7083e82-e27f-4d60-a871-fc73e0e922c4"
+    },
+    {
+      "x": 59,
+      "y": 589.5,
+      "width": 38,
+      "height": 15,
+      "confidence": 0.20465964078903198,
+      "class": "fan",
+      "class_id": 0,
+      "detection_id": "d52ebd1f-f1d2-44be-8362-c4f2fde1773b"
+    },
+    {
+      "x": 804,
+      "y": 903,
+      "width": 48,
+      "height": 30,
+      "confidence": 0.20149880647659302,
+      "class": "fan",
+      "class_id": 0,
+      "detection_id": "84376495-5051-4df4-ac99-49b15246b0ff"
+    }
+  ]
+}

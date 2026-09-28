@@ -83,6 +83,7 @@ async function setImage(file, { sample = false, name = file.name, observation = 
   state.session = null;
   $("candidate-overlay").replaceChildren();
   $("results-area").hidden = true;
+  $("other-regions").open = false;
   $("candidate-detail").hidden = true;
   $("roboflow-line").textContent = "Waiting for the image scan.";
   $("jev-line").textContent = "It can ask for one wider view before suggesting a label.";
@@ -291,6 +292,7 @@ async function startRun() {
   $("image-input").disabled = true;
   $("candidate-detail").hidden = true;
   $("results-area").hidden = true;
+  $("other-regions").open = false;
   state.candidates = []; state.session = null; state.selectedId = null;
   $("candidate-overlay").replaceChildren();
   $("image-stamp").textContent = "SCANNING IMAGE";

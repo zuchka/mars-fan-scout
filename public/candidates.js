@@ -40,7 +40,7 @@ export function predictionsFromRoboflow(data, { width, height }) {
 }
 
 export function showcaseCandidates(items, { width, height }, count = 3) {
-  const minArea = Math.max(50, width * height * .00005);
+  const minArea = Math.max(50, width * height * .0005);
   const eligible = items.filter(item => item.area >= minArea &&
     item.bounds.right - item.bounds.left >= 8 && item.bounds.bottom - item.bounds.top >= 8);
   const selected = [];

@@ -1,0 +1,36 @@
+{
+  "inference_id": "7c41fddf-a7e9-4ce0-9dda-86dc4ae86ff9",
+  "time": 0.013322313781827688,
+  "resolved_model": {
+    "model_id": "matt-abrams/mars-fan-box-proposals-1-rfdetr-small-t1",
+    "model_package_id": "a44d78082c87b74e4b0d3bbb6a71e284",
+    "backend": "trt",
+    "quantization": "fp16"
+  },
+  "image": {
+    "width": 1024,
+    "height": 1024
+  },
+  "predictions": [
+    {
+      "x": 715,
+      "y": 860.5,
+      "width": 34,
+      "height": 83,
+      "confidence": 0.23899394273757935,
+      "class": "fan",
+      "class_id": 0,
+      "detection_id": "d7bc1739-91d4-4766-8183-373052a6169b"
+    },
+    {
+      "x": 721.5,
+      "y": 886.5,
+      "width": 13,
+      "height": 27,
+      "confidence": 0.20354916155338287,
+      "class": "fan",
+      "class_id": 0,
+      "detection_id": "3ee79b2d-289d-4c81-89a0-4a119ab96dc8"
+    }
+  ]
+}
