@@ -51,6 +51,8 @@ h1 em{font-style:normal;color:var(--orange)}
 .image-frame>svg{pointer-events:none}
 .candidate-mask{fill:#ef9f6720;stroke:var(--orange);stroke-width:2;vector-effect:non-scaling-stroke;transition:fill .2s,stroke-width .2s}
 .candidate-mask.active{fill:#ef9f6744;stroke-width:3.5;filter:drop-shadow(0 0 4px #f7a66c)}
+.sam3-mask{fill:#67d7cc24;stroke:#8ff2df;stroke-width:2.4;vector-effect:non-scaling-stroke;stroke-dasharray:5 3}
+.sam3-mask.active{fill:#67d7cc38;stroke-width:3;filter:drop-shadow(0 0 4px #8ff2df)}
 .context-window{fill:none;stroke:var(--gold);stroke-width:2;stroke-dasharray:7 5;vector-effect:non-scaling-stroke}
 .candidate-number{font:700 24px ui-monospace,SFMono-Regular,Menlo,monospace;fill:#fff;paint-order:stroke;stroke:#3c241b;stroke-width:5}
 .image-scan{position:absolute;inset:0;background:linear-gradient(180deg,#ef9f6700,#ef9f6714);z-index:2;overflow:hidden}
@@ -60,8 +62,15 @@ h1 em{font-style:normal;color:var(--orange)}
 .image-corner{position:absolute;width:21px;height:21px;border-color:#f7ba86;z-index:3;pointer-events:none}
 .top-left{top:10px;left:10px;border-top:2px solid;border-left:2px solid}.top-right{top:10px;right:10px;border-top:2px solid;border-right:2px solid}.bottom-left{bottom:10px;left:10px;border-bottom:2px solid;border-left:2px solid}.bottom-right{bottom:10px;right:10px;border-bottom:2px solid;border-right:2px solid}
 .image-foot{min-height:62px;padding:14px 20px;display:flex;align-items:center;justify-content:space-between;gap:15px;color:var(--muted);font-size:13px;border-top:1px solid var(--line)}
+.mask-help{display:flex;flex-direction:column;gap:3px}
+#refine-status{font-size:12px;color:#a4e8d9}
+.image-actions{display:flex;align-items:center;gap:15px;flex-wrap:wrap}
+#refine-button{border:1px solid #8ff2df;background:#1b3b3d;color:#ccfff1;border-radius:3px;padding:8px 11px;font-size:12px;font-weight:750;white-space:nowrap}
+#refine-button:hover:not(:disabled){background:#275457}
+#refine-button:disabled{opacity:.6;cursor:wait}
 .upload-link{color:var(--orange);font-weight:700;cursor:pointer;white-space:nowrap}
 .upload-link:hover{text-decoration:underline}
+@media(max-width:800px){.image-foot{align-items:flex-start;flex-direction:column}.image-actions{width:100%;justify-content:space-between}}
 .story-column{display:flex;flex-direction:column}
 .run-light{font-size:10px;letter-spacing:.12em;font-weight:800;color:var(--muted);border:1px solid var(--line);padding:7px 9px;white-space:nowrap}
 .run-light.active{color:var(--orange);border-color:#b47750}.run-light.done{color:var(--green);border-color:#59896b}

@@ -3,12 +3,11 @@ import { readFile } from "node:fs/promises";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve, extname } from "node:path";
 import { fileURLToPath } from "node:url";
+import sharp from "sharp";
 import { createDemoAccess } from "./demo-access.mjs";
 import { zipSync, strToU8 } from "fflate";
 import { ReviewStore } from "./review-agent/store.mjs";
-import { ReviewBudget } from "./review-agent/budget.mjs";
 import { ReviewRunner } from "./review-agent/runner.mjs";
-import { makeJevProvider, MODEL as reviewModel, MLX_SOURCE_REVISION } from "./review-agent/provider.mjs";
 
 const root = resolve(fileURLToPath(new URL(".", import.meta.url)));
 const publicDir = resolve(root, "public");
@@ -43,28 +42,8 @@ const recordingsComplete = sceneData.every(scene => existsSync(resolve(recordedD
 const ready = replay ? recordingsComplete : configured && !training;
 const reviewStore = new ReviewStore(resolve(root, process.env.REVIEW_AGENT_DATA_DIR || ".review-agent"));
 await reviewStore.init();
-const reviewBudget = new ReviewBudget(resolve(root, ".review-agent-budget.json"), {
-  dailyCallLimit: process.env.REVIEW_AGENT_DAILY_CALL_LIMIT,
-  reservationUsd: 0,
-});
-let reviewProvider = null;
-if (process.env.REVIEW_AGENT_ENABLED === "1" && process.env.JEV_SERVICE_URL) {
-  const backend = process.env.JEV_BACKEND || "cuda-bf16";
-  const candidateProvider = makeJevProvider({
-    url: process.env.JEV_SERVICE_URL, token: process.env.JEV_SERVICE_TOKEN || "",
-    expectedBackend: backend,
-    expectedRevision: backend === "mlx-4bit" ? MLX_SOURCE_REVISION : undefined,
-    imageTokens: backend === "mlx-4bit" ? Number(process.env.JEV_IMAGE_TOKENS || 70) : null,
-    computeUsdPerHour: process.env.JEV_COMPUTE_USD_PER_HOUR || null,
-  });
-  try { await candidateProvider.probe(); reviewProvider = candidateProvider; }
-  catch (error) {
-    console.error("Jev service unavailable at startup:", error.message);
-    if (new URL(process.env.JEV_SERVICE_URL).hostname.endsWith(".endpoints.huggingface.cloud")) reviewProvider = candidateProvider;
-  }
-}
-const reviewRunner = new ReviewRunner({ store: reviewStore, budget: reviewBudget, provider: reviewProvider,
-  policy: { minProbability: Number(process.env.JEV_MIN_PROBABILITY || 0.8), minMargin: Number(process.env.JEV_MIN_MARGIN || 0.25) } });
+// Keep historical review sessions readable and exportable, but never start a model review.
+const reviewRunner = new ReviewRunner({ store: reviewStore, budget: null, provider: null });
 const reviewFixtures = JSON.parse(readFileSync(resolve(root, "evaluation/agent-review/manifest.json"), "utf8"));
 
 function send(response, status, data, type = "application/json; charset=utf-8") {
@@ -147,6 +126,62 @@ async function inferImage(data) {
   }
 }
 
+function polygonArea(points) {
+  return Math.abs(points.reduce((sum, [x, y], index) => {
+    const [nextX, nextY] = points[(index + 1) % points.length];
+    return sum + x * nextY - nextX * y;
+  }, 0)) / 2;
+}
+
+async function refineMasks(body) {
+  if (typeof body?.image_base64 !== "string" || body.image_base64.length > 4 * 1024 * 1024 ||
+      !/^[A-Za-z0-9+/]+={0,2}$/.test(body.image_base64)) throw new Error("Invalid JPEG image");
+  const image = Buffer.from(body.image_base64, "base64");
+  if (image.length > 3 * 1024 * 1024 || image[0] !== 0xff || image[1] !== 0xd8 || image.at(-2) !== 0xff || image.at(-1) !== 0xd9) {
+    throw new Error("Invalid JPEG image");
+  }
+  const { width, height, format } = await sharp(image).metadata();
+  if (format !== "jpeg" || !width || !height || width > 1024 || height > 1024) throw new Error("Expected a JPEG crop up to 1024 pixels wide");
+  if (!Array.isArray(body.boxes) || body.boxes.length < 1 || body.boxes.length > 3) throw new Error("Choose one to three regions");
+  const boxes = body.boxes.map(box => {
+    const { x, y, width: boxWidth, height: boxHeight } = box || {};
+    if (![x, y, boxWidth, boxHeight].every(Number.isFinite) || boxWidth < 4 || boxHeight < 4 ||
+        x < 0 || x > width || y < 0 || y > height || boxWidth > width * 2 || boxHeight > height * 2) {
+      throw new Error("Invalid region box");
+    }
+    return { box: { x, y, width: boxWidth, height: boxHeight } };
+  });
+  return { image, width, height, boxes };
+}
+
+async function inferSam3({ image, width, height, boxes }) {
+  const started = performance.now();
+  const endpoint = new URL("https://serverless.roboflow.com/sam3/visual_segment");
+  endpoint.searchParams.set("api_key", apiKey);
+  let response;
+  try {
+    response = await fetch(endpoint, { method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ image: { type: "base64", value: image.toString("base64") }, prompts: { prompts: boxes },
+        multimask_output: false, format: "polygon" }), signal: AbortSignal.timeout(35000) });
+  } catch (_) { return { status: 502, body: { error: "SAM 3 is temporarily unreachable" } }; }
+  if (!response.ok) return { status: 502, body: { error: `SAM 3 returned HTTP ${response.status}` } };
+  let data;
+  try { data = await response.json(); }
+  catch (_) { return { status: 502, body: { error: "SAM 3 returned an unreadable response" } }; }
+  if (!Array.isArray(data.predictions) || data.predictions.length !== boxes.length) {
+    return { status: 502, body: { error: "SAM 3 returned an unexpected number of masks" } };
+  }
+  const masks = data.predictions.map(prediction => {
+    const polygons = Array.isArray(prediction.masks) ? prediction.masks : [];
+    const valid = polygons.map(points => Array.isArray(points) ? points.filter(point => Array.isArray(point) && point.length === 2 &&
+      point.every(Number.isFinite) && point[0] >= 0 && point[0] <= width && point[1] >= 0 && point[1] <= height) : [])
+      .filter(points => points.length >= 3 && points.length <= 10000 && polygonArea(points) >= 20);
+    valid.sort((a, b) => polygonArea(b) - polygonArea(a));
+    return { polygon: valid[0] || null, confidence: Number.isFinite(prediction.confidence) ? prediction.confidence : null };
+  });
+  return { status: 200, body: { masks, sam3_request_ms: Math.round(performance.now() - started) } };
+}
+
 async function infer(sceneId) {
   const asset = sceneAssets.get(sceneId);
   if (!asset) return { status:404, body:{ error:"Unknown observation" } };
@@ -170,10 +205,9 @@ const server = createServer(async (request, response) => {
     const url = new URL(request.url, "http://localhost");
     if (request.method === "GET" && url.pathname === "/api/status") {
       const granted = access.authorized(request.headers["x-demo-access-code"]);
-      if (granted && reviewProvider?.warm) void reviewProvider.warm().catch(error => console.error("Jev warm-up failed:", error.message));
-      return send(response, 200, { ready, scout_ready:configured && !training && !replay, configured, training:training && !replay, mode:replay ? "recorded" : "live", model_id:modelIdValid ? modelId : null, access_required:access.accessRequired, access_granted:granted, daily_remaining:granted ? access.remaining() : null,
-        review_agent: granted ? { ...reviewBudget.status(), enabled: reviewRunner.enabled,
-          model: reviewProvider?.metadata?.model || reviewModel, backend: reviewProvider?.metadata?.backend || null } : { enabled: false } });
+      return send(response, 200, { ready, scout_ready:configured && !training && !replay, configured, training:training && !replay,
+        mode:replay ? "recorded" : "live", model_id:modelIdValid ? modelId : null,
+        access_required:access.accessRequired, access_granted:granted, daily_remaining:granted ? access.remaining() : null });
     }
     if (request.method === "GET" && url.pathname === "/api/scout/evaluation") {
       try {
@@ -227,11 +261,7 @@ const server = createServer(async (request, response) => {
       if (request.method === "GET" && !tail) return send(response, 200, publicReviewSession(session));
       if (request.method === "GET" && tail === "image") return send(response, 200, await reviewStore.source(session), session.image.format === "png" ? "image/png" : "image/jpeg");
       if (request.method === "POST" && tail === "runs") {
-        let body;
-        try { body = await readBody(request, 8192); }
-        catch (_) { return send(response, 400, { error: "Invalid run request" }); }
-        try { return send(response, 202, reviewRunner.publicRun(session, await reviewRunner.enqueue(session, body.candidate_ids, body.idempotency_key))); }
-        catch (error) { return send(response, reviewRunner.enabled ? 400 : 503, { error: error.message }); }
+        return send(response, 410, { error: "The visual review model has been retired" });
       }
       const runMatch = tail.match(/^runs\/([a-f0-9-]{36})$/);
       if (request.method === "GET" && runMatch) {
@@ -291,6 +321,16 @@ const server = createServer(async (request, response) => {
       const result = await inferImage(image);
       return send(response, result.status, result.body);
     }
+    if (request.method === "POST" && url.pathname === "/api/scout/refine") {
+      if (!access.authorized(request.headers["x-demo-access-code"])) return send(response, 401, { error: "Enter the demo access code to refine masks" });
+      if (!apiKey || replay) return send(response, 503, { error: "Live SAM 3 refinement is unavailable" });
+      let input;
+      try { input = await refineMasks(await readLargeJson(request, 5 * 1024 * 1024)); }
+      catch (error) { return send(response, 400, { error: error.message }); }
+      if (!access.reserve()) return send(response, 429, { error: "The demo has reached its daily scan limit" });
+      const result = await inferSam3(input);
+      return send(response, result.status, result.body);
+    }
     if (request.method === "POST" && url.pathname === "/api/infer") {
       if (!access.authorized(request.headers["x-demo-access-code"])) return send(response, 401, { error:"Enter the demo access code to scan" });
       let input;
@@ -304,6 +344,10 @@ const server = createServer(async (request, response) => {
     }
     if (request.method !== "GET" && request.method !== "HEAD") return send(response, 405, { error:"Method not allowed" });
     const requested = url.pathname === "/" ? "/index.html" : decodeURIComponent(url.pathname);
+    if (requested === "/research.html") {
+      response.writeHead(302, { location: "/", "cache-control": "no-store" });
+      return response.end();
+    }
     const path = resolve(publicDir, "." + requested);
     if (!path.startsWith(publicDir + "/")) return send(response, 403, { error:"Forbidden" });
     let data;
