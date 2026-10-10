@@ -1,0 +1,27 @@
+{
+  "format": "mars-boundary-review-v1",
+  "status": "needs_human_annotation",
+  "source": {
+    "name": "ESP_011296_0975_APF00006nz.jpg",
+    "original_sha256": "aa2a2fc1a9e9d8bbb682b00eeda3fdd16714694538ea2d16ca72a283b8d92561",
+    "width": 768,
+    "height": 768,
+    "observation": "ESP_011296_0975",
+    "image": "training/refined-coco/train/ESP_011296_0975_APF00006nz.jpg",
+    "pixel_scale_m": null,
+    "coordinate_convention": "pixel edges in this retained chip; not coordinates in the parent JP2",
+    "normalization": "Existing training JPEG; pre-export stretch not recoverable"
+  },
+  "split": "train",
+  "reviewer": null,
+  "second_reviewer": null,
+  "coverage_complete": false,
+  "unknown": {
+    "polygons": []
+  },
+  "instances": [],
+  "notes": [
+    "Annotate the source before exposing model proposals. No weak labels have been copied into this template.",
+    "Do not mark coverage complete until every visible instance and ambiguous region has been reviewed."
+  ]
+}

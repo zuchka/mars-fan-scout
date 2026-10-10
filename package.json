@@ -3,13 +3,18 @@
   "version": "1.0.0",
   "description": "Roboflow Mars fan evidence viewer and bounded human-reviewed vision-agent experiment.",
   "type": "module",
-  "engines": { "node": ">=20.9.0" },
+  "engines": {
+    "node": ">=20.9.0"
+  },
   "scripts": {
     "start": "node server.mjs",
     "test": "node --test scripts/*.test.mjs",
     "prepare:agent-review": "node scripts/prepare_agent_review.mjs",
     "report:agent-review": "node scripts/report_agent_review.mjs",
-    "purge:agent-review": "node scripts/purge_review_sessions.mjs"
+    "purge:agent-review": "node scripts/purge_review_sessions.mjs",
+    "prepare:boundary-review": "node scripts/prepare_boundary_review.mjs",
+    "score:boundaries": "node scripts/score_boundaries.mjs",
+    "validate:benchmark": "node scripts/validate_boundary_benchmark.mjs"
   },
   "repository": {
     "type": "git",

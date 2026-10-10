@@ -1,6 +1,10 @@
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, createReadStream } from "node:fs";
+import { SourceStore } from "./scout/source-store.mjs";
+import { ScanJobs } from "./scout/jobs.mjs";
+import { clipRegion, tilesForRegion } from './public/geometry.js';
+import { decodeRLE } from "./public/masks.js";
 import { resolve, extname } from "node:path";
 import { fileURLToPath } from "node:url";
 import sharp from "sharp";
@@ -154,7 +158,7 @@ async function refineMasks(body) {
   return { image, width, height, boxes };
 }
 
-async function inferSam3({ image, width, height, boxes }) {
+async function inferSam3({ image, width, height, boxes, format = 'polygon' }) {
   const started = performance.now();
   const endpoint = new URL("https://serverless.roboflow.com/sam3/visual_segment");
   endpoint.searchParams.set("api_key", apiKey);
@@ -162,7 +166,7 @@ async function inferSam3({ image, width, height, boxes }) {
   try {
     response = await fetch(endpoint, { method: "POST", headers: { "content-type": "application/json" },
       body: JSON.stringify({ image: { type: "base64", value: image.toString("base64") }, prompts: { prompts: boxes },
-        multimask_output: false, format: "polygon" }), signal: AbortSignal.timeout(35000) });
+        multimask_output: false, format }), signal: AbortSignal.timeout(35000) });
   } catch (_) { return { status: 502, body: { error: "SAM 3 is temporarily unreachable" } }; }
   if (!response.ok) return { status: 502, body: { error: `SAM 3 returned HTTP ${response.status}` } };
   let data;
@@ -171,15 +175,21 @@ async function inferSam3({ image, width, height, boxes }) {
   if (!Array.isArray(data.predictions) || data.predictions.length !== boxes.length) {
     return { status: 502, body: { error: "SAM 3 returned an unexpected number of masks" } };
   }
-  const masks = data.predictions.map(prediction => {
+  let masks;
+  try { masks = data.predictions.map(prediction => {
+    if (format === 'rle') {
+      const raster = decodeRLE(prediction.masks, 2048 * 2048);
+      if (raster.width !== width || raster.height !== height) throw new Error('Unexpected SAM mask dimensions');
+      return { rle: prediction.masks, format: 'rle', holes_preserved: true, area: raster.pixels.reduce((a,b)=>a+b,0), confidence: Number.isFinite(prediction.confidence) ? prediction.confidence : null };
+    }
     const polygons = Array.isArray(prediction.masks) ? prediction.masks : [];
     const valid = polygons.map(points => Array.isArray(points) ? points.filter(point => Array.isArray(point) && point.length === 2 &&
       point.every(Number.isFinite) && point[0] >= 0 && point[0] <= width && point[1] >= 0 && point[1] <= height) : [])
       .filter(points => points.length >= 3 && points.length <= 10000 && polygonArea(points) >= 20);
     valid.sort((a, b) => polygonArea(b) - polygonArea(a));
-    return { polygon: valid[0] || null, confidence: Number.isFinite(prediction.confidence) ? prediction.confidence : null };
-  });
-  return { status: 200, body: { masks, sam3_request_ms: Math.round(performance.now() - started) } };
+    return { polygon: valid[0] || null, polygons: valid, format: "polygon", holes_preserved: false, confidence: Number.isFinite(prediction.confidence) ? prediction.confidence : null };
+  }); } catch (_) { return { status: 502, body: { error: 'SAM returned an invalid raster mask; the previous trace is retained' } }; }
+  return { status: 200, body: { masks, resolved_model: data.resolved_model || null, inference_id: data.inference_id || null, sam3_request_ms: Math.round(performance.now() - started) } };
 }
 
 async function infer(sceneId) {
@@ -200,14 +210,64 @@ async function infer(sceneId) {
   return inferImage(await readFile(file));
 }
 
+const scoutFeatures = { native_refinement: process.env.SCOUT_NATIVE_REFINEMENT !== '0', tiled_detection: process.env.SCOUT_TILED_DETECTION !== '0', experimental_fringe: process.env.SCOUT_EXPERIMENTAL_FRINGE !== '0' };
+const scoutDir = resolve(root, process.env.SCOUT_DATA_DIR || ".scout");
+const defaultOrbit = resolve(root, "../data/planet-four/images/ESP_082142_0935_RED.JP2");
+const orbitPath = process.env.SCOUT_ORBIT_PATH || (existsSync(defaultOrbit) ? defaultOrbit : null);
+const sources = new SourceStore(root, resolve(scoutDir, "sources"), { orbitPath, python: process.env.SCOUT_PYTHON || "python3", maxSourceBytes: Number(process.env.SCOUT_SOURCE_QUOTA_MIB || 2048) * 1024**2 });
+await sources.init();
+const jobs = new ScanJobs({ directory: resolve(scoutDir,"jobs"), sources, access, infer: inferImage, refine: inferSam3, modelId });
+await jobs.init();
+
 const server = createServer(async (request, response) => {
   try {
     const url = new URL(request.url, "http://localhost");
     if (request.method === "GET" && url.pathname === "/api/status") {
       const granted = access.authorized(request.headers["x-demo-access-code"]);
       return send(response, 200, { ready, scout_ready:configured && !training && !replay, configured, training:training && !replay,
-        mode:replay ? "recorded" : "live", model_id:modelIdValid ? modelId : null,
+        native_pipeline: "native-v1", features: scoutFeatures, full_observation_available: !!orbitPath, mode:replay ? "recorded" : "live", model_id:modelIdValid ? modelId : null,
         access_required:access.accessRequired, access_granted:granted, daily_remaining:granted ? access.remaining() : null });
+    }
+    if (url.pathname === "/api/scout/sources" && request.method === "POST") {
+      if (!access.authorized(request.headers["x-demo-access-code"])) return send(response,401,{error:"Enter the meeting code to upload"});
+      try {
+        const chunks=[]; let size=0;
+        for await (const chunk of request) { size+=chunk.length; if(size>32*1024*1024) throw new Error("Choose an image under 32 MiB"); chunks.push(chunk); }
+        return send(response,201,await sources.add(Buffer.concat(chunks),decodeURIComponent(request.headers["x-source-name"]||"Uploaded Mars crop")));
+      } catch(error) { return send(response,400,{error:error.message}); }
+    }
+    const sourceMatch=url.pathname.match(/^\/api\/scout\/sources\/(sample|orbit|[a-f0-9]{64})(?:\/(preview|region|original))?$/);
+    if(sourceMatch && request.method === "GET") {
+      const [,id,action]=sourceMatch;
+      if(!["sample","orbit"].includes(id)&&!access.authorized(request.headers["x-demo-access-code"])) return send(response,401,{error:"Meeting code required"});
+      try {
+        const meta=await sources.meta(id);
+        if(!action) return send(response,200,meta);
+        if(action==='preview') return send(response,200,await sources.preview(id),'image/jpeg');
+        if(action==='original') {
+          const path=await sources.original(id);
+          response.writeHead(200,{'content-type':'application/octet-stream','content-disposition':`attachment; filename="${id}-original.${meta.original_format}"`,'cache-control':'no-store'});
+          const stream=createReadStream(path);stream.on('error',()=>response.destroy());return stream.pipe(response);
+        }
+        const region={x:Number(url.searchParams.get('x')),y:Number(url.searchParams.get('y')),width:Number(url.searchParams.get('width')),height:Number(url.searchParams.get('height'))};
+        const image=await sources.region(id,region,Number(url.searchParams.get('max')||1024));
+        return send(response,200,image.bytes,'image/png');
+      } catch(error) { return send(response,400,{error:error.message}); }
+    }
+    if(url.pathname === '/api/scout/jobs' && request.method==='POST') {
+      if(!access.authorized(request.headers['x-demo-access-code'])) return send(response,401,{error:'Meeting code required'});
+      if(!configured||training||replay) return send(response,503,{error:'Live inference is unavailable'});
+      try { const body=await readBody(request,16384);if(body.kind==='refine'&&!scoutFeatures.native_refinement)throw new Error('Native tracing is disabled on this deployment');if(body.kind!=='refine'&&!scoutFeatures.tiled_detection){const meta=await sources.meta(body.source_id);const region=clipRegion(body.region,meta);if(tilesForRegion(region,Number(body.scale||1)).length>1)throw new Error('Multi-tile scanning is disabled on this deployment');}return send(response,202,jobs.public(await jobs.create(body))); }
+      catch(error) { return send(response,400,{error:error.message}); }
+    }
+    const jobMatch=url.pathname.match(/^\/api\/scout\/jobs\/([a-f0-9-]{36})(?:\/(cancel))?$/);
+    if(jobMatch) {
+      if(!access.authorized(request.headers['x-demo-access-code'])) return send(response,401,{error:'Meeting code required'});
+      try {
+        if(request.method==='POST'&&jobMatch[2]==='cancel') return send(response,200,jobs.public(await jobs.cancel(jobMatch[1])));
+        if(request.method==='GET'&&!jobMatch[2]) return send(response,200,jobs.public(jobs.jobs.get(jobMatch[1])));
+        return send(response,405,{error:'Method not allowed'});
+      } catch(error) { return send(response,404,{error:error.message}); }
     }
     if (request.method === "GET" && url.pathname === "/api/scout/evaluation") {
       try {

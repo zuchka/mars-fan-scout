@@ -8,7 +8,7 @@
   <title>Mars Fan Scout — Live Vision Demo</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="stylesheet" href="/demo.css">
-  <script type="module" src="/demo.js?v=12"></script>
+  <script type="module" src="/demo.js?v=20"></script>
 </head>
 <body>
   <div class="shell">
@@ -24,11 +24,11 @@
           <h1>Is this a <em>Mars fan?</em></h1>
           <p>RF-DETR spots possible dust deposits in a real Mars image. You can ask SAM 3 to trace fuller edges, then inspect the source pixels yourself. These outlines are proposals, not confirmed fans.</p>
         </div>
-        <div class="source-note"><span class="source-kicker">THE IMAGE</span><strong>Spiders in Manhattan</strong><span>HiRISE · ESP_082142_0935</span><a href="https://hirise.lpl.arizona.edu/ESP_082142_0935" target="_blank" rel="noopener">NASA source ↗</a></div>
+        <div class="source-note" id="source-note"><span class="source-kicker">THE IMAGE</span><strong id="source-name">Spiders in Manhattan</strong><span id="source-observation">HiRISE · ESP_082142_0935</span><a id="source-link" href="https://hirise.lpl.arizona.edu/ESP_082142_0935" target="_blank" rel="noopener">NASA source ↗</a></div>
       </section>
 
       <section id="access-panel" class="access-panel" hidden>
-        <div><span class="access-kicker">ONE STEP TO START</span><h2>Enter the meeting code.</h2><p>The sample image runs automatically after you unlock the demo.</p></div>
+        <div><span class="access-kicker">ONE STEP TO START</span><h2>Enter the meeting code.</h2><p>Unlock scans and native-resolution tracing. Source pixels stay available for inspection.</p></div>
         <form id="access-form"><label for="access-code" class="sr-only">Meeting code</label><input id="access-code" type="password" autocomplete="off" placeholder="Meeting code" required><button type="submit">Start the demo <span aria-hidden="true">↗</span></button></form>
         <p id="access-error" class="form-error" role="alert" hidden></p>
       </section>
@@ -36,19 +36,37 @@
       <section class="showcase" aria-label="Mars image and vision results">
         <div class="image-column">
           <div class="panel-heading"><div><span class="eyebrow">01 / SOURCE IMAGE</span><h2 id="image-title">Spiders in Manhattan</h2></div><span class="image-label" id="image-label">NASA HiRISE · 2024</span></div>
-          <div class="image-frame" id="image-frame">
-            <img id="mars-image" src="/images/scout-2024-dev.jpg" alt="HiRISE image of dark deposits on Mars's south polar ice">
-            <svg id="candidate-overlay" viewBox="0 0 1024 1024" aria-label="RF-DETR and SAM 3 candidate outlines"></svg>
-            <div class="image-scan" id="image-scan" hidden><div class="scan-line"></div><span>ROBOFLOW IS SCANNING THE PIXELS</span></div>
-            <span class="image-corner top-left"></span><span class="image-corner top-right"></span><span class="image-corner bottom-left"></span><span class="image-corner bottom-right"></span>
-            <span class="image-stamp" id="image-stamp">ORIGINAL IMAGE</span>
+          <div class="viewer-tools" aria-label="Image controls">
+            <button id="fit-view" type="button">Fit</button><button id="zoom-out" type="button" aria-label="Zoom out">−</button><button id="zoom-in" type="button" aria-label="Zoom in">+</button><button id="native-view" type="button">1:1 pixels</button><span id="zoom-label"></span>
+            <button id="hide-overlays" type="button" aria-pressed="false">Hide overlays</button>
           </div>
-          <div class="image-foot"><div class="mask-help"><span id="mask-legend">Orange = RF-DETR core · dashed square = selected crop</span><span id="refine-status" role="status" hidden></span></div><div class="image-actions"><button id="refine-button" type="button" hidden>Trace with SAM 3</button><label class="upload-link" for="image-input">Try your own Mars crop <span aria-hidden="true">↗</span><input id="image-input" type="file" accept="image/jpeg,image/png,image/webp" hidden></label></div></div>
+          <div class="image-frame" id="image-frame" tabindex="0" aria-label="Mars image viewer. Drag to pan, scroll to zoom, or use arrow keys to pan.">
+            <canvas id="mars-image" aria-label="Original-resolution Mars image"></canvas>
+            <svg id="candidate-overlay" aria-label="Candidate outlines"></svg>
+            <span class="image-stamp" id="image-stamp">ORIGINAL PIXELS RETAINED</span>
+          </div>
+          <div class="layer-controls">
+            <label><input id="rf-layer" type="checkbox" checked> RF-DETR</label><label><input id="sam-layer" type="checkbox" checked> SAM 3</label>
+            <label>Fill <input id="fill-opacity" type="range" min="0" max="60" value="10" aria-label="Overlay fill opacity"></label>
+            <label>View contrast <input id="view-contrast" type="range" min="75" max="180" value="100" aria-label="Display contrast"></label>
+          </div>
+          <p class="source-meta" id="source-meta"></p>
+          <div class="image-foot"><div class="mask-help"><span id="mask-legend">Orange = detector proposal · cyan = SAM outline</span><span id="refine-status" role="status" hidden></span><span id="storage-status" role="status"></span></div></div>
+          <div class="viewer-tools source-actions">
+            <label class="upload-link" for="image-input" role="button" tabindex="0">Upload a Mars crop <input id="image-input" type="file" accept="image/jpeg,image/png,image/webp" hidden></label>
+            <button id="sample-button" type="button">Sample crop</button><button id="orbit-button" type="button" hidden>Full observation</button><button id="download-source" type="button">Download original</button>
+          </div>
         </div>
 
         <div class="story-column">
-          <div class="panel-heading"><div><span class="eyebrow">02 / WHAT THE MODELS SEE</span><h2>The live run</h2></div><span class="run-light" id="run-light">WAITING</span></div>
+          <div class="panel-heading"><div><span class="eyebrow">02 / WHAT THE MODELS SEE</span><h2>Scan and inspect</h2></div><span class="run-light" id="run-light">WAITING</span></div>
           <div class="story-body">
+            <div class="scan-controls">
+              <label>Scan area <select id="scan-area"><option value="view">Visible area</option><option value="full">Entire image</option></select></label>
+              <label>Analysis scale <select id="scan-scale"><option value="2">1 m/pixel · sample baseline</option><option value="1">Native pixels · experimental</option></select></label>
+              <div class="action-row"><button id="scan-button" type="button">Scan image</button><button id="cancel-scan" type="button" hidden>Cancel scan</button><button id="retry-scan" type="button" hidden>Retry unfinished tiles</button></div>
+              <p id="scan-estimate"></p><progress id="scan-progress" max="1" value="0" hidden aria-label="Completed scan tiles"></progress>
+            </div>
             <div class="story-step" id="roboflow-step"><span class="step-icon">1</span><div><strong>RF-DETR finds candidate regions</strong><p id="roboflow-line">Waiting for the image scan.</p></div></div>
             <div class="story-step" id="sam-step"><span class="step-icon">2</span><div><strong>SAM 3 can trace fuller edges</strong><p id="sam-line">Optional after the image scan.</p></div></div>
             <div class="story-step" id="answer-step"><span class="step-icon">3</span><div><strong>Inspect the source pixels</strong><p id="answer-line">An outline alone cannot confirm a fan.</p></div></div>
@@ -57,16 +75,28 @@
             <div id="candidate-detail" class="candidate-detail" hidden>
               <div class="detail-title"><span id="detail-name"></span><strong id="detail-verdict"></strong></div>
               <p id="detail-explanation"></p>
-              <div class="evidence-grid"><figure><img id="source-evidence" alt="Source pixels around the selected candidate"><figcaption>Source pixels around this region</figcaption></figure></div>
+              <div class="action-row"><button id="inspect-native" type="button">Inspect at 1:1</button><button id="refine-button" type="button">Trace selected with SAM 3</button></div>
+              <label class="context-label">Context <select id="context-size"><option value="2.6">Standard</option><option value="4">Wider</option><option value="1.8">Tighter</option></select></label>
+              <div class="evidence-view"><canvas id="source-evidence" aria-label="Native candidate context and optional fringe estimate"></canvas></div>
+              <p id="evidence-caption" class="detail-timing"></p>
+              <div class="action-row" id="review-buttons"><button type="button" data-decision="accepted">Accept</button><button type="button" data-decision="rejected">Reject</button><button type="button" data-decision="unsure">Unsure</button><button type="button" data-decision="pending">Clear review</button></div>
+              <details class="fringe-controls"><summary>Explore diffuse extent · experimental</summary>
+                <p>Estimate connected dark signal around this proposal. This is not a fan probability or a dust measurement.</p>
+                <label>Extent sensitivity <input id="fringe-sensitivity" type="range" min="0" max="100" value="45"></label>
+                <div class="action-row"><button id="fringe-button" type="button">Estimate fringe</button><button id="fringe-clear" type="button">Hide fringe</button></div>
+                <label>Click source to <select id="edit-mode"><option value="inspect">Inspect only</option><option value="include">Include seed</option><option value="exclude">Exclude local pixels</option></select></label>
+                <div class="action-row"><button id="undo-edit" type="button">Undo click</button><button id="reset-edits" type="button">Reset clicks</button></div>
+                <p id="fringe-status" role="status"></p>
+              </details>
             </div>
             <p id="run-error" class="run-error" role="alert" hidden></p>
           </div>
-          <div class="story-footer"><span id="footer-status">Unlock to begin.</span><button id="run-again" type="button" hidden>Run again ↻</button></div>
+          <div class="story-footer"><span id="footer-status">Unlock to begin.</span><button id="export-review" type="button" disabled>Export review JSON</button><label class="upload-link" for="review-input" role="button" tabindex="0">Import review<input id="review-input" type="file" accept="application/json,.json" hidden></label></div>
         </div>
       </section>
 
     </main>
-    <footer class="footer"><span>MARS FAN SCOUT <span class="divider">/</span> A LIVE VISION EXPERIMENT</span><span>IMAGE: NASA / JPL-CALTECH / UARIZONA</span></footer>
+    <footer class="footer"><span>MARS FAN SCOUT <span class="divider">/</span> A LIVE VISION EXPERIMENT</span><span><span id="image-credit">IMAGE: NASA / JPL-CALTECH / UARIZONA</span></span></footer>
   </div>
 </body>
 </html>

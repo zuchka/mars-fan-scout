@@ -14,7 +14,8 @@
       "source_scale_m_per_pixel": 0.5,
       "working_scale_m_per_pixel": 1,
       "image": "holdout-01.jpg",
-      "label_status": "unlabeled; detector has not been run"
+      "label_status": "unlabeled; detector inference completed and inspected during development",
+      "original_label_status": "unlabeled; detector has not been run"
     },
     {
       "id": "holdout-02",
@@ -28,7 +29,8 @@
       "source_scale_m_per_pixel": 0.5,
       "working_scale_m_per_pixel": 1,
       "image": "holdout-02.jpg",
-      "label_status": "unlabeled; detector has not been run"
+      "label_status": "unlabeled; detector inference completed and inspected during development",
+      "original_label_status": "unlabeled; detector has not been run"
     },
     {
       "id": "holdout-03",
@@ -42,7 +44,13 @@
       "source_scale_m_per_pixel": 0.5,
       "working_scale_m_per_pixel": 1,
       "image": "holdout-03.jpg",
-      "label_status": "unlabeled; detector has not been run"
+      "label_status": "unlabeled; detector inference completed and inspected during development",
+      "original_label_status": "unlabeled; detector has not been run"
     }
-  ]
+  ],
+  "usage": "development regression / rocky-terrain stress test; exposed to model output; not an untouched final holdout",
+  "provenance_correction": {
+    "date": "2026-10-09",
+    "reason": "Frozen *.roboflow.json and detector-report.json establish that inference ran after selection. Original selection history retained."
+  }
 }

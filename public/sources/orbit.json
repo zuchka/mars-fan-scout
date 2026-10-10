@@ -1,0 +1,35 @@
+{
+  "id": "orbit",
+  "name": "Full HiRISE observation",
+  "observation": "ESP_082142_0935",
+  "width": 17007,
+  "height": 16131,
+  "bit_depth": 16,
+  "pixel_scale_m": 0.5,
+  "raw_bounds": [
+    0,
+    0,
+    17007,
+    16131
+  ],
+  "coordinate_convention": "pixel edges; x right, y down; crop origin is (0,0)",
+  "original_sha256": "9ed7ff474793cbf75cbabc2c95bd04a4d075e5574bdc40f15b0e3e7048622a41",
+  "product_sha256": "9ed7ff474793cbf75cbabc2c95bd04a4d075e5574bdc40f15b0e3e7048622a41",
+  "display_sha256": null,
+  "original_format": "jp2",
+  "source_note": "Original map-projected HiRISE JP2; black gaps are missing image coverage, not negative terrain",
+  "normalization": {
+    "method": "overview percentile stretch",
+    "low": 18962.0,
+    "high": 50800.0,
+    "gamma": 0.92,
+    "output_bits": 8
+  },
+  "preview": "/sources/orbit-preview.jpg",
+  "display": null,
+  "original": "/api/scout/sources/orbit/original",
+  "native_focus": {
+    "x": 3328,
+    "y": 8000
+  }
+}
