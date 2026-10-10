@@ -14,3 +14,4 @@ data/
 .review-agent-budget.json
 .jev-venv/
 .models/
+.scout/

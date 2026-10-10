@@ -2,7 +2,7 @@
 
 ## RF-DETR and SAM 3 deployment
 
-The live demo uses Roboflow RF-DETR Seg for proposals and an optional SAM 3 box-prompt call for the three featured regions. Both routes use the private ROBOFLOW_API_KEY and the existing meeting code. SAM 3 consumes one more daily scan allowance when clicked. The server no longer connects to the retired visual-review GPU, even if old JEV environment variables remain in the Sprite's private configuration. Pause or delete the separate Hugging Face endpoint in its control panel to stop any idle hosting charges; deploying this source alone does not change that endpoint.
+The live demo uses Roboflow RF-DETR Seg for proposals and an optional SAM 3 box-prompt call for the selected region. Both routes use the private ROBOFLOW_API_KEY and the existing meeting code. SAM 3 consumes one more daily scan allowance when clicked. The server no longer connects to the retired visual-review GPU, even if old JEV environment variables remain in the Sprite's private configuration. Pause or delete the separate Hugging Face endpoint in its control panel to stop any idle hosting charges; deploying this source alone does not change that endpoint.
 
 Historical review sessions and evidence under /home/sprite/mars-fan-scout/.review-agent/ should be preserved for export. They are no longer used by the home page. The retired model code and evaluation artifacts remain in Git history and repository files for audit.
 
@@ -28,12 +28,22 @@ The official [Sprites MCP endpoint](https://fly.io/sprites/ecosystem/) is `https
 
 5. Use `sprite url` to obtain the private URL. Verify `/api/status` reports `scout_ready: true`, `access_required: true`, and `access_granted: false` without the code, then verify the code unlocks scanning. Once those checks pass, run `sprite url update --auth public` to share the demo URL. An unknown visitor can browse the images and evaluation, but paid model scans require the code.
 
-The daily limit counts **Roboflow requests**: one for each RF-DETR image crop and one more when SAM 3 tracing is requested. The home page fits uploads to 1024 pixels before inference. The allowance resets at midnight UTC and is kept in the Sprite's persistent filesystem. The limit is a demonstration cost guard, not a substitute for a provider-side budget. A reservation counts even when Roboflow returns an error.
+The daily limit counts **Roboflow requests**: one for each RF-DETR image crop and one more when SAM 3 tracing is requested. The native pipeline preserves uploads and extracts bounded PNG tiles for inference. The allowance resets at midnight UTC and is kept in the Sprite's persistent filesystem. The limit is a demonstration cost guard, not a substitute for a provider-side budget. A reservation counts even when Roboflow returns an error.
 
-For updates, push source changes to GitHub, then run `sprite exec -- git -C /home/sprite/mars-fan-scout pull --ff-only` and `sprite exec -- sprite-env services restart mars-fan-scout`. Never put the API key or meeting code into a public repository, browser asset, or URL. The served image upload is processed in memory, then sent to Roboflow as tiles; the server does not retain uploaded image files. Browser review decisions remain in that visitor's local storage.
+For updates, push source changes to GitHub, then run `sprite exec -- git -C /home/sprite/mars-fan-scout pull --ff-only` and `sprite exec -- sprite-env services restart mars-fan-scout`. Never put the API key or meeting code into a public repository, browser asset, or URL. The native pipeline retains exact uploaded bytes and derivatives in `.scout/sources/`, and persists job results in `.scout/jobs/`. Browser review decisions use IndexedDB. Preserve these directories and `.demo-usage.json` through upgrades and rollback.
 
 ## Custom domain
 
 Sprites currently provide a `*.sprites.app` URL but no native custom-hostname/certificate setup. The `zuchka studios` Cloudflare account has Worker `mars-fan-scout-proxy` with `mars.zuchka.dev` attached as a Production Custom Domain. Cloudflare automatically created the DNS record and certificate. The deployed Worker code is mirrored in [`cloudflare/mars-fan-scout-proxy.js`](cloudflare/mars-fan-scout-proxy.js); edit/deploy it in the Cloudflare Worker dashboard if its upstream URL changes. The Worker forwards the original path, method, body, and headers—including the meeting-code header—to the Sprite. The Sprite remains publicly reachable at its own URL.
 
 Check `https://mars.zuchka.dev/api/status` for `scout_ready: true`. A successful page load also confirms the Cloudflare certificate and proxy route. The Worker itself does not store the Roboflow key or meeting code.
+
+## Native-pipeline release checklist (not yet deployed)
+
+The prepared 2048-pixel sample works with Node and Sharp. Ship `assets/scout-native-16.png` and `public/sources/` with the code. The existing 97 MiB observation is optional and should live outside the public directory. Enabling its button requires Python with NumPy/Pillow and the OpenJPEG `opj_decompress` executable; set `SCOUT_ORBIT_PATH` and `SCOUT_PYTHON`. The server verifies the original product hash. Test the decoder before exposing this option.
+
+Set `SCOUT_DATA_DIR` to persistent writable storage and `SCOUT_SOURCE_QUOTA_MIB` to the measured available quota (default 2048). Originals are never removed by cache pruning. Completed job results and manifests persist; restart marks interrupted dispatched calls as unknown and never silently retries them. Explicit retry skips completed tiles but may repeat an unknown-outcome provider call. Back up this directory before rollback; do not run two server processes against the same directory and allowance file.
+
+Roll out independently with `SCOUT_NATIVE_REFINEMENT`, `SCOUT_TILED_DETECTION`, and `SCOUT_EXPERIMENTAL_FRINGE` (1/0). Keep a pinned application commit and model/configuration record plus the preceding working commit for rollback. The existing detector remains unchanged. The fringe layer must remain clearly experimental until reviewed boundary comparisons meet the roadmap's gates.
+
+Before production promotion, run the suite and rehearse through **both origin and proxy**: code gating; native sample; a lossless upload and byte-identical original download; pan/zoom and mask alignment; a native SAM trace; cancel/partial/retry; refresh without a new provider call; empty and unavailable-provider states; export and restoration; mobile/projector layouts. Measure cold/warm time to first proposal, completion time, memory, disk and request count on the deployed hardware. Local verification does not establish these deployment results. Confirm the 32 MiB upload limit through the actual proxy before promising it to demo attendees.

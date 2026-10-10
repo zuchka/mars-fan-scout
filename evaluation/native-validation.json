@@ -1,0 +1,214 @@
+{
+  "format": "mars-native-engineering-validation-v1",
+  "recorded_at": "2026-10-10T05:10:35.915Z",
+  "scope": "Local engineering verification; not an accuracy benchmark or deployed-origin validation",
+  "tests": {
+    "command": "npm test",
+    "passed": 36,
+    "failed": 0
+  },
+  "source_preservation": {
+    "sample_dimensions": [
+      2048,
+      2048
+    ],
+    "sample_bit_depth": 16,
+    "byte_identical_upload_download": true,
+    "exif_orientation_test": true,
+    "native_jp2_region": {
+      "region": {
+        "x": 2305,
+        "y": 6977,
+        "width": 611,
+        "height": 397
+      },
+      "mean_display_pixel_error": 0,
+      "max_display_pixel_error": 0
+    },
+    "odd_region_scale_2": {
+      "source": [
+        601,
+        401
+      ],
+      "model_grid": [
+        301,
+        201
+      ]
+    }
+  },
+  "browser_checks": [
+    "Live RF-DETR scale-matched sample scan",
+    "Live nine-tile native scan",
+    "Native SAM polygon and RLE calls",
+    "Native 1:1 inspection and overlay alignment",
+    "Full observation overview and valid-coverage native focus",
+    "2048-pixel 16-bit upload without resizing the original",
+    "Return to sample restores saved source-specific review",
+    "Export/import preserves source, raw results, raster mask and human decision",
+    "Refresh restores saved results without a new provider request",
+    "Experimental fringe, exclusion click and undo",
+    "390-pixel viewport without horizontal overflow",
+    "No captured browser errors/warnings"
+  ],
+  "bounded_viewer": {
+    "observation_dimensions": [
+      17007,
+      16131
+    ],
+    "desktop_css_viewport": [
+      678,
+      380
+    ],
+    "canvas_backing_pixels": [
+      1356,
+      760
+    ]
+  },
+  "live_runs": [
+    {
+      "job_id": "0cec5ce2-2b5b-4f27-b2fb-c0b7d8b714f8",
+      "kind": "scan",
+      "status": "complete",
+      "created_at": "2026-10-10T05:03:26.505Z",
+      "source_id": "sample",
+      "scale": 1,
+      "tiles": 9,
+      "completed": 9,
+      "elapsed_ms": 2966,
+      "first_result_ms": 1168,
+      "inputs": [
+        {
+          "width": 1024,
+          "height": 1024
+        },
+        {
+          "width": 1024,
+          "height": 1024
+        },
+        {
+          "width": 1024,
+          "height": 1024
+        },
+        {
+          "width": 1024,
+          "height": 1024
+        },
+        {
+          "width": 1024,
+          "height": 1024
+        },
+        {
+          "width": 1024,
+          "height": 1024
+        },
+        {
+          "width": 1024,
+          "height": 1024
+        },
+        {
+          "width": 1024,
+          "height": 1024
+        },
+        {
+          "width": 1024,
+          "height": 1024
+        }
+      ],
+      "provider_ms": [
+        1154,
+        1130,
+        541,
+        515,
+        387,
+        385,
+        377,
+        466,
+        334
+      ],
+      "mask_format": "polygon"
+    },
+    {
+      "job_id": "4307d62d-aeb9-450d-b1bc-301c204c4084",
+      "kind": "refine",
+      "status": "complete",
+      "created_at": "2026-10-10T04:45:27.504Z",
+      "source_id": "sample",
+      "scale": 1,
+      "tiles": 1,
+      "completed": 1,
+      "elapsed_ms": 723,
+      "first_result_ms": 723,
+      "inputs": [
+        {
+          "width": 416,
+          "height": 416
+        }
+      ],
+      "provider_ms": [
+        698
+      ],
+      "mask_format": "polygon"
+    },
+    {
+      "job_id": "ba4ec1b3-d88f-4edf-a410-bbcad44c489f",
+      "kind": "refine",
+      "status": "complete",
+      "created_at": "2026-10-10T04:53:25.793Z",
+      "source_id": "sample",
+      "scale": 1,
+      "tiles": 1,
+      "completed": 1,
+      "elapsed_ms": 893,
+      "first_result_ms": 893,
+      "inputs": [
+        {
+          "width": 416,
+          "height": 416
+        }
+      ],
+      "provider_ms": [
+        866
+      ],
+      "mask_format": "rle"
+    },
+    {
+      "job_id": "bd7c284f-8822-4f72-9ed3-09c90be7c78b",
+      "kind": "scan",
+      "status": "complete",
+      "created_at": "2026-10-10T04:44:55.625Z",
+      "source_id": "sample",
+      "scale": 2,
+      "tiles": 1,
+      "completed": 1,
+      "elapsed_ms": 7221,
+      "first_result_ms": 7221,
+      "inputs": [
+        {
+          "width": 1024,
+          "height": 1024
+        }
+      ],
+      "provider_ms": [
+        7170
+      ],
+      "mask_format": "polygon"
+    }
+  ],
+  "latency_note": "Single local runs only: initial detector request was about 7.2s; warm nine-tile scan was about 3.0s. No cold-start or statistical performance guarantee.",
+  "detector_comparison": {
+    "scale_matched_proposals": 26,
+    "native_tiled_proposals": 89,
+    "meaning": "Different proposal counts are not evidence of better precision or recall; scale-matched remains the default."
+  },
+  "fault_checks": "Cancellation, partial failure, idempotent IDs, resume/retry, quota, restart and request accounting verified with deterministic tests. The live nine-tile scan finished before the manual cancel click took effect.",
+  "pending": [
+    "Human boundary annotations and second reviews",
+    "Fresh final observations and accuracy gates",
+    "Corrected-label retraining",
+    "Random-walker and learned matting comparison",
+    "Numeric 16-bit analysis and source validity masks",
+    "General full-observation ingestion/georeferencing",
+    "Proxy/origin upload limits, deployed latency, peak-memory measurement and release/rollback rehearsal"
+  ],
+  "deployment": "Not deployed; local preview only"
+}

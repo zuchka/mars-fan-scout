@@ -1,0 +1,31 @@
+{
+  "id": "sample",
+  "name": "Spiders in Manhattan",
+  "observation": "ESP_082142_0935",
+  "width": 2048,
+  "height": 2048,
+  "bit_depth": 16,
+  "pixel_scale_m": 0.5,
+  "raw_bounds": [
+    2304,
+    6976,
+    4352,
+    9024
+  ],
+  "coordinate_convention": "pixel edges; x right, y down; crop origin is (0,0)",
+  "original_sha256": "898a7625cffa34122d2ce6597ef13dbc64230f64e6f026e320770889d4af4bbf",
+  "product_sha256": "9ed7ff474793cbf75cbabc2c95bd04a4d075e5574bdc40f15b0e3e7048622a41",
+  "display_sha256": "d26be10b8c65abfcf0c2429bc9b34d6cfa134e92fd4798523790e00754496fe8",
+  "original_format": "png",
+  "source_note": "Unmodified native sample values extracted from the map-projected JP2; original full product retained separately",
+  "normalization": {
+    "method": "percentile stretch",
+    "low": 21780.0,
+    "high": 49839.0,
+    "gamma": 0.92,
+    "output_bits": 8
+  },
+  "preview": "/sources/sample-preview.jpg",
+  "display": "/sources/sample-native.png",
+  "original": "/api/scout/sources/sample/original"
+}
