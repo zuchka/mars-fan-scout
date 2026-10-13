@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { isReviewed, nextUnreviewed, reviewProgress, setReview } from "../public/review-flow.js";
+import { isReviewed, nextUnreviewed, normalizeReviews, recordsForScan, reviewProgress, setReview } from "../public/review-flow.js";
 
 test("clearing a review removes its saved decision and progress", () => {
   const candidates = [{ id: "a" }, { id: "b" }];
@@ -12,6 +12,8 @@ test("clearing a review removes its saved decision and progress", () => {
   assert.equal(isReviewed(reviews, "a"), false);
   assert.equal(reviewProgress(candidates, reviews), 0);
   assert.equal(Object.hasOwn(reviews, "a"), false);
+  assert.deepEqual(normalizeReviews({ a: { decision: "pending" }, b: { decision: "unsure" } }),
+    { b: { decision: "unsure" } });
 });
 
 test("next unreviewed skips completed decisions and wraps through the queue", () => {
@@ -22,4 +24,21 @@ test("next unreviewed skips completed decisions and wraps through the queue", ()
   setReview(reviews, "a", "accepted", "hash", "now");
   assert.equal(reviewProgress(candidates, reviews), 3);
   assert.equal(nextUnreviewed(candidates, reviews, "b"), null);
+});
+
+test("a fresh scan clears associations while a retry keeps matching candidate IDs", () => {
+  const records = {
+    reviews: { a: { decision: "accepted" }, b: { decision: "unsure" } },
+    refined: { a: { mask: true } },
+    edits: { b: [{ x: 1 }] },
+    fringes: {},
+  };
+  const candidates = [{ id: "a" }, { id: "c" }];
+  assert.deepEqual(recordsForScan({ candidates }, records), {
+    reviews: {}, refined: {}, edits: {}, fringes: {},
+  });
+  assert.deepEqual(recordsForScan({ candidates, retry_of: "prior-run" }, records), {
+    reviews: { a: { decision: "accepted" } },
+    refined: { a: { mask: true } }, edits: {}, fringes: {},
+  });
 });

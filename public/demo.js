@@ -7,7 +7,7 @@ import {
 import { ImageViewer } from "./image-viewer.js";
 import { saveSession, loadSession } from "./session-store.js";
 import { maskRGBA, decodeRLE } from "./masks.js";
-import { isReviewed, nextUnreviewed, reviewProgress, setReview } from "./review-flow.js";
+import { isReviewed, nextUnreviewed, normalizeReviews, recordsForScan, reviewProgress, setReview } from "./review-flow.js";
 const $ = (id) => document.getElementById(id),
   NS = "http://www.w3.org/2000/svg";
 const rasterCache = new Map();
@@ -213,6 +213,7 @@ function updateControls() {
     state.estimate > 25 ||
     (state.features?.tiled_detection === false && state.estimate > 1) ||
     state.remaining === 0;
+  $("scan-button").textContent = state.run ? "Start a new scan" : "Scan image";
   for (const id of [
     "image-input",
     "sample-button",
@@ -485,6 +486,16 @@ function renderRun() {
   void showDetail();
   updateControls();
 }
+function adoptScanResult(result) {
+  if (state.run?.id !== result.id) {
+    const currentIds = new Set(result.candidates.map((candidate) => candidate.id));
+    Object.assign(state, recordsForScan(result, state));
+    if (!currentIds.has(state.selected)) state.selected = null;
+  }
+  state.run = result;
+  state.restored = false;
+  renderRun();
+}
 async function pollJob(jobId, onUpdate, generation) {
   for (;;) {
     const job = await api(`/api/scout/jobs/${jobId}`);
@@ -498,6 +509,13 @@ async function pollJob(jobId, onUpdate, generation) {
 }
 async function startScan(retry = false) {
   if (!state.access || state.busy || state.refining) return;
+  if (!retry && state.run && (
+    reviewProgress(state.run.candidates, state.reviews) ||
+    Object.keys(state.refined).length || Object.keys(state.edits).length ||
+    Object.keys(state.fringes).length
+  ) && !window.confirm(
+    "A new scan will replace the current result and clear its reviews, traces, and edits from this view. Export the current review first if you need it. Start a new scan?",
+  )) return;
   const generation = state.generation;
   const previous = state.run,
     prior = retry ? state.job || state.run : null;
@@ -549,9 +567,7 @@ async function startScan(retry = false) {
         $("roboflow-line").textContent =
           `${result.completed}/${result.total} tiles complete · ${result.status}`;
         if (result.completed || result.status === "complete") {
-          state.run = result;
-          state.restored = false;
-          renderRun();
+          adoptScanResult(result);
         }
         await persist();
       },
@@ -818,7 +834,7 @@ async function restore(sourceId) {
     state.job = saved.job;
     state.selected = saved.selected;
     state.refined = saved.refined || {};
-    state.reviews = saved.reviews || {};
+    state.reviews = normalizeReviews(saved.reviews);
     state.edits = saved.edits || {};
     state.fringes = saved.fringes || {};
     state.restored = true;
@@ -842,8 +858,7 @@ async function restore(sourceId) {
           state.job = job;
           $("scan-progress").max = job.total;
           $("scan-progress").value = job.completed;
-          if (job.completed || job.status === "complete") state.run = job;
-          renderRun();
+          if (job.completed || job.status === "complete") adoptScanResult(job);
           $("retry-scan").hidden=!["partial","failed","cancelled","interrupted"].includes(job.status);
           $("retry-scan").textContent='Retry unfinished tiles';
           if(job.tiles.some(t=>t.status==='unknown'))message('Some dispatched calls have unknown outcomes. Retrying them may create another provider charge; completed tiles will be reused.');
@@ -1201,7 +1216,7 @@ async function init() {
         : record.latest_job || record.run;
       state.selected = record.run.candidates[0]?.id || null;
       state.refined = record.refinements || {};
-      state.reviews = record.reviews || {};
+      state.reviews = normalizeReviews(record.reviews);
       state.edits = record.edits || {};
       state.fringes = fringes;
       state.restored = true;

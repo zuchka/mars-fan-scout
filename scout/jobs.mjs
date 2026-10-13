@@ -309,6 +309,13 @@ export class ScanJobs {
   }
   public(job) {
     if (!job) throw new Error("Unknown job");
+    let candidateOrigin = job;
+    const ancestors = new Set();
+    while (candidateOrigin.retry_of && this.jobs.has(candidateOrigin.retry_of) &&
+      !ancestors.has(candidateOrigin.retry_of)) {
+      ancestors.add(candidateOrigin.id);
+      candidateOrigin = this.jobs.get(candidateOrigin.retry_of);
+    }
     const candidates = [];
     if (job.kind === "scan")
       for (const tile of job.tiles.filter((t) => t.status === "complete")) {
@@ -340,7 +347,7 @@ export class ScanJobs {
           const b = bounds(polygon),
             margin = tile.scale * 2;
           candidates.push({
-            id: `${job.id}:${tile.id}:${i}`,
+            id: `${candidateOrigin.id}:${tile.id}:${i}`,
             tile_id: tile.id,
             polygon,
             confidence: Number(p.confidence),
