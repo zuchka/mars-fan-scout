@@ -8,7 +8,7 @@
   <title>Mars Fan Scout — Live Vision Demo</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="stylesheet" href="/demo.css">
-  <script type="module" src="/demo.js?v=22"></script>
+  <script type="module" src="/demo.js?v=23"></script>
 </head>
 <body>
   <div class="shell">
@@ -40,7 +40,7 @@
             <button id="fit-view" type="button">Fit</button><button id="zoom-out" type="button" aria-label="Zoom out">−</button><button id="zoom-in" type="button" aria-label="Zoom in">+</button><button id="native-view" type="button">1:1 pixels</button><span id="zoom-label"></span>
             <button id="hide-overlays" type="button" aria-pressed="false">Hide overlays</button>
           </div>
-          <div class="image-frame" id="image-frame" tabindex="0" aria-label="Mars image viewer. Drag to pan, scroll to zoom, or use arrow keys to pan.">
+          <div class="image-frame" id="image-frame" tabindex="0" aria-label="Mars image viewer. Click an orange proposal to inspect it, drag to pan, scroll to zoom, or use arrow keys to pan.">
             <canvas id="mars-image" aria-label="Original-resolution Mars image"></canvas>
             <svg id="candidate-overlay" aria-label="Candidate outlines"></svg>
             <span class="image-stamp" id="image-stamp">ORIGINAL PIXELS RETAINED</span>
@@ -51,7 +51,7 @@
             <label>View contrast <input id="view-contrast" type="range" min="75" max="180" value="100" aria-label="Display contrast"></label>
           </div>
           <p class="source-meta" id="source-meta"></p>
-          <div class="image-foot"><div class="mask-help"><span id="mask-legend">Orange = detector proposal · cyan = SAM outline</span><span id="refine-status" role="status" hidden></span><span id="storage-status" role="status"></span></div></div>
+          <div class="image-foot"><div class="mask-help"><span id="mask-legend">Click an orange proposal to inspect · cyan = SAM outline</span><span id="refine-status" role="status" hidden></span><span id="storage-status" role="status"></span></div></div>
           <div class="viewer-tools source-actions">
             <label class="upload-link" for="image-input" role="button" tabindex="0">Upload a Mars crop <input id="image-input" type="file" accept="image/jpeg,image/png,image/webp" hidden></label>
             <button id="sample-button" type="button">Sample crop</button><button id="orbit-button" type="button" hidden>Full observation</button><button id="download-source" type="button">Download original</button>

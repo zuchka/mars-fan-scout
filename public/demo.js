@@ -1,6 +1,7 @@
 import {
   bounds,
   candidateRegion,
+  inside,
   tilesForRegion,
   mapPoints,
 } from "./geometry.js";
@@ -943,6 +944,29 @@ async function init() {
       : "Hide overlays";
     drawMasks();
   };
+  let imagePress = null;
+  $("image-frame").addEventListener("pointerdown", (event) => {
+    if (event.button === 0) imagePress = { x: event.clientX, y: event.clientY };
+  });
+  $("image-frame").addEventListener("pointerup", (event) => {
+    if (!imagePress) return;
+    const moved = Math.hypot(event.clientX - imagePress.x, event.clientY - imagePress.y);
+    imagePress = null;
+    if (moved > 5 || state.hidden || !state.run || !$("rf-layer").checked ||
+      $("candidate-overlay").style.visibility === "hidden") return;
+    const rect = $("image-frame").getBoundingClientRect();
+    const point = [viewer.offset.x + (event.clientX - rect.left) / viewer.zoom,
+      viewer.offset.y + (event.clientY - rect.top) / viewer.zoom];
+    const candidate = state.run.candidates.find((item, index) =>
+      (index < 3 || item.id === state.selected) && inside(point, item.polygon));
+    if (!candidate || candidate.id === state.selected) return;
+    state.selected = candidate.id;
+    drawMasks();
+    renderResults();
+    void showDetail({ focus: true });
+    void persist();
+  });
+  $("image-frame").addEventListener("pointercancel", () => { imagePress = null; });
   document.addEventListener("keydown", (e) => {
     if (e.key === " " && e.target === $("image-frame")) {
       e.preventDefault();
