@@ -1,12 +1,14 @@
 import {
   bounds,
   candidateRegion,
+  inside,
   tilesForRegion,
   mapPoints,
 } from "./geometry.js";
 import { ImageViewer } from "./image-viewer.js";
 import { saveSession, loadSession } from "./session-store.js";
 import { maskRGBA, decodeRLE } from "./masks.js";
+import { isReviewed, nextUnreviewed, normalizeReviews, recordsForScan, reviewProgress, setReview } from "./review-flow.js";
 const $ = (id) => document.getElementById(id),
   NS = "http://www.w3.org/2000/svg";
 const rasterCache = new Map();
@@ -142,6 +144,7 @@ async function setSource(source, { remember = true } = {}) {
   state.detail = null;
   state.busy = false;
   state.refining = false;
+  document.body.classList.remove("has-results");
   $("image-stamp").textContent = "ORIGINAL PIXELS RETAINED";
   $("image-title").textContent = source.name;
   $("image-label").textContent =
@@ -211,6 +214,7 @@ function updateControls() {
     state.estimate > 25 ||
     (state.features?.tiled_detection === false && state.estimate > 1) ||
     state.remaining === 0;
+  $("scan-button").textContent = state.run ? "Start a new scan" : "Scan image";
   for (const id of [
     "image-input",
     "sample-button",
@@ -308,9 +312,11 @@ function scaleLabels() {
 function renderResults() {
   const items = state.run?.candidates || [];
   $("results-area").hidden = !items.length;
-  $("results-count").textContent = `${items.length} proposals · human review`;
+  $("results-count").textContent = `${reviewProgress(items, state.reviews)} of ${items.length} reviewed`;
   $("other-regions").hidden = items.length <= 3;
   $("other-regions-count").textContent = String(Math.max(0, items.length - 3));
+  if (items.findIndex((candidate) => candidate.id === state.selected) >= 3)
+    $("other-regions").open = true;
   $("results-list").replaceChildren();
   $("other-results-list").replaceChildren();
   items.forEach((c, i) => {
@@ -332,19 +338,21 @@ function renderResults() {
     name.append(small);
     const tag = document.createElement("span");
     tag.className = "verdict";
-    tag.textContent = state.reviews[c.id]?.decision || "Inspect";
+    tag.textContent = isReviewed(state.reviews, c.id)
+      ? state.reviews[c.id].decision
+      : "Not reviewed";
     button.append(number, name, tag);
     button.addEventListener("click", () => {
       state.selected = c.id;
       drawMasks();
       renderResults();
-      void showDetail();
+      void showDetail({ focus: true });
       void persist();
     });
     $(i < 3 ? "results-list" : "other-results-list").append(button);
   });
 }
-async function showDetail() {
+async function showDetail({ focus = false } = {}) {
   const candidate = selected(),
     token = ++state.detailToken;
   state.worker?.terminate();
@@ -357,17 +365,29 @@ async function showDetail() {
   $("detail-name").textContent =
     `SHAPE ${String(state.run.candidates.indexOf(candidate) + 1).padStart(2, "0")}`;
   $("detail-verdict").textContent =
-    state.reviews[candidate.id]?.decision || "Candidate";
+    isReviewed(state.reviews, candidate.id)
+      ? state.reviews[candidate.id].decision
+      : "Not reviewed";
   $("detail-explanation").textContent =
     "Inspect the source and surrounding terrain. A fuller outline is still a proposal.";
   for (const button of $("review-buttons").querySelectorAll("button"))
     button.setAttribute(
       "aria-pressed",
       String(
-        (state.reviews[candidate.id]?.decision || "pending") ===
-          button.dataset.decision,
+        state.reviews[candidate.id]?.decision === button.dataset.decision,
       ),
     );
+  $("clear-review").disabled = !isReviewed(state.reviews, candidate.id);
+  $("next-unreviewed").disabled = !nextUnreviewed(
+    state.run.candidates, state.reviews, candidate.id,
+  );
+  $("next-unreviewed").textContent = reviewProgress(state.run.candidates, state.reviews) === state.run.candidates.length
+    ? "All proposals reviewed"
+    : "Next unreviewed →";
+  if (focus) {
+    $("candidate-detail").focus({ preventScroll: true });
+    $("candidate-detail").scrollIntoView({ block: "start" });
+  }
   $("fringe-status").textContent = "";
   $("evidence-caption").textContent = "Loading native context…";
   updateControls();
@@ -451,6 +471,7 @@ function renderRun() {
     state.selected = state.run.candidates[0]?.id || null;
   drawMasks();
   renderResults();
+  document.body.classList.toggle("has-results", state.run.candidates.length > 0);
   $("roboflow-line").textContent =
     `${state.run.candidates.length} proposed regions from ${state.run.completed}/${state.run.total} completed tiles. ${state.run.status === "complete" ? "Requested area scanned." : "Coverage is incomplete."} Run scale: ${state.run.scale === 1 ? "native pixels" : `${state.run.scale}× source reduction`}.`;
   $("sam-line").textContent =
@@ -466,6 +487,16 @@ function renderRun() {
   void showDetail();
   updateControls();
 }
+function adoptScanResult(result) {
+  if (state.run?.id !== result.id) {
+    const currentIds = new Set(result.candidates.map((candidate) => candidate.id));
+    Object.assign(state, recordsForScan(result, state));
+    if (!currentIds.has(state.selected)) state.selected = null;
+  }
+  state.run = result;
+  state.restored = false;
+  renderRun();
+}
 async function pollJob(jobId, onUpdate, generation) {
   for (;;) {
     const job = await api(`/api/scout/jobs/${jobId}`);
@@ -479,6 +510,13 @@ async function pollJob(jobId, onUpdate, generation) {
 }
 async function startScan(retry = false) {
   if (!state.access || state.busy || state.refining) return;
+  if (!retry && state.run && (
+    reviewProgress(state.run.candidates, state.reviews) ||
+    Object.keys(state.refined).length || Object.keys(state.edits).length ||
+    Object.keys(state.fringes).length
+  ) && !window.confirm(
+    "A new scan will replace the current result and clear its reviews, traces, and edits from this view. Export the current review first if you need it. Start a new scan?",
+  )) return;
   const generation = state.generation;
   const previous = state.run,
     prior = retry ? state.job || state.run : null;
@@ -530,9 +568,7 @@ async function startScan(retry = false) {
         $("roboflow-line").textContent =
           `${result.completed}/${result.total} tiles complete · ${result.status}`;
         if (result.completed || result.status === "complete") {
-          state.run = result;
-          state.restored = false;
-          renderRun();
+          adoptScanResult(result);
         }
         await persist();
       },
@@ -799,7 +835,7 @@ async function restore(sourceId) {
     state.job = saved.job;
     state.selected = saved.selected;
     state.refined = saved.refined || {};
-    state.reviews = saved.reviews || {};
+    state.reviews = normalizeReviews(saved.reviews);
     state.edits = saved.edits || {};
     state.fringes = saved.fringes || {};
     state.restored = true;
@@ -823,8 +859,7 @@ async function restore(sourceId) {
           state.job = job;
           $("scan-progress").max = job.total;
           $("scan-progress").value = job.completed;
-          if (job.completed || job.status === "complete") state.run = job;
-          renderRun();
+          if (job.completed || job.status === "complete") adoptScanResult(job);
           $("retry-scan").hidden=!["partial","failed","cancelled","interrupted"].includes(job.status);
           $("retry-scan").textContent='Retry unfinished tiles';
           if(job.tiles.some(t=>t.status==='unknown'))message('Some dispatched calls have unknown outcomes. Retrying them may create another provider charge; completed tiles will be reused.');
@@ -909,6 +944,29 @@ async function init() {
       : "Hide overlays";
     drawMasks();
   };
+  let imagePress = null;
+  $("image-frame").addEventListener("pointerdown", (event) => {
+    if (event.button === 0) imagePress = { x: event.clientX, y: event.clientY };
+  });
+  $("image-frame").addEventListener("pointerup", (event) => {
+    if (!imagePress) return;
+    const moved = Math.hypot(event.clientX - imagePress.x, event.clientY - imagePress.y);
+    imagePress = null;
+    if (moved > 5 || state.hidden || !state.run || !$("rf-layer").checked ||
+      $("candidate-overlay").style.visibility === "hidden") return;
+    const rect = $("image-frame").getBoundingClientRect();
+    const point = [viewer.offset.x + (event.clientX - rect.left) / viewer.zoom,
+      viewer.offset.y + (event.clientY - rect.top) / viewer.zoom];
+    const candidate = state.run.candidates.find((item, index) =>
+      (index < 3 || item.id === state.selected) && inside(point, item.polygon));
+    if (!candidate || candidate.id === state.selected) return;
+    state.selected = candidate.id;
+    drawMasks();
+    renderResults();
+    void showDetail({ focus: true });
+    void persist();
+  });
+  $("image-frame").addEventListener("pointercancel", () => { imagePress = null; });
   document.addEventListener("keydown", (e) => {
     if (e.key === " " && e.target === $("image-frame")) {
       e.preventDefault();
@@ -950,16 +1008,37 @@ async function init() {
     const decision = event.target.dataset.decision,
       c = selected();
     if (!decision || !c) return;
-    state.reviews[c.id] = {
-      decision,
-      at: new Date().toISOString(),
-      candidate_id: c.id,
-      source_sha256: state.source.original_sha256,
-    };
+    setReview(state.reviews, c.id, decision, state.source.original_sha256, new Date().toISOString());
     renderResults();
     $("detail-verdict").textContent = decision;
     for (const b of $("review-buttons").querySelectorAll("button"))
       b.setAttribute("aria-pressed", String(b.dataset.decision === decision));
+    $("clear-review").disabled = false;
+    $("next-unreviewed").disabled = !nextUnreviewed(state.run.candidates, state.reviews, c.id);
+    $("next-unreviewed").textContent = reviewProgress(state.run.candidates, state.reviews) === state.run.candidates.length
+      ? "All proposals reviewed" : "Next unreviewed →";
+    void persist();
+  };
+  $("clear-review").onclick = () => {
+    const c = selected();
+    if (!c || !isReviewed(state.reviews, c.id)) return;
+    setReview(state.reviews, c.id, "pending");
+    renderResults();
+    $("detail-verdict").textContent = "Not reviewed";
+    for (const b of $("review-buttons").querySelectorAll("button"))
+      b.setAttribute("aria-pressed", "false");
+    $("clear-review").disabled = true;
+    $("next-unreviewed").disabled = !nextUnreviewed(state.run.candidates, state.reviews, c.id);
+    $("next-unreviewed").textContent = "Next unreviewed →";
+    void persist();
+  };
+  $("next-unreviewed").onclick = () => {
+    const next = nextUnreviewed(state.run?.candidates || [], state.reviews, state.selected);
+    if (!next) return;
+    state.selected = next.id;
+    drawMasks();
+    renderResults();
+    void showDetail({ focus: true });
     void persist();
   };
   $("fringe-button").onclick = estimate;
@@ -1161,7 +1240,7 @@ async function init() {
         : record.latest_job || record.run;
       state.selected = record.run.candidates[0]?.id || null;
       state.refined = record.refinements || {};
-      state.reviews = record.reviews || {};
+      state.reviews = normalizeReviews(record.reviews);
       state.edits = record.edits || {};
       state.fringes = fringes;
       state.restored = true;

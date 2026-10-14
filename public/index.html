@@ -8,7 +8,7 @@
   <title>Mars Fan Scout — Live Vision Demo</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="stylesheet" href="/demo.css">
-  <script type="module" src="/demo.js?v=20"></script>
+  <script type="module" src="/demo.js?v=23"></script>
 </head>
 <body>
   <div class="shell">
@@ -40,7 +40,7 @@
             <button id="fit-view" type="button">Fit</button><button id="zoom-out" type="button" aria-label="Zoom out">−</button><button id="zoom-in" type="button" aria-label="Zoom in">+</button><button id="native-view" type="button">1:1 pixels</button><span id="zoom-label"></span>
             <button id="hide-overlays" type="button" aria-pressed="false">Hide overlays</button>
           </div>
-          <div class="image-frame" id="image-frame" tabindex="0" aria-label="Mars image viewer. Drag to pan, scroll to zoom, or use arrow keys to pan.">
+          <div class="image-frame" id="image-frame" tabindex="0" aria-label="Mars image viewer. Click an orange proposal to inspect it, drag to pan, scroll to zoom, or use arrow keys to pan.">
             <canvas id="mars-image" aria-label="Original-resolution Mars image"></canvas>
             <svg id="candidate-overlay" aria-label="Candidate outlines"></svg>
             <span class="image-stamp" id="image-stamp">ORIGINAL PIXELS RETAINED</span>
@@ -51,7 +51,7 @@
             <label>View contrast <input id="view-contrast" type="range" min="75" max="180" value="100" aria-label="Display contrast"></label>
           </div>
           <p class="source-meta" id="source-meta"></p>
-          <div class="image-foot"><div class="mask-help"><span id="mask-legend">Orange = detector proposal · cyan = SAM outline</span><span id="refine-status" role="status" hidden></span><span id="storage-status" role="status"></span></div></div>
+          <div class="image-foot"><div class="mask-help"><span id="mask-legend">Click an orange proposal to inspect · cyan = SAM outline</span><span id="refine-status" role="status" hidden></span><span id="storage-status" role="status"></span></div></div>
           <div class="viewer-tools source-actions">
             <label class="upload-link" for="image-input" role="button" tabindex="0">Upload a Mars crop <input id="image-input" type="file" accept="image/jpeg,image/png,image/webp" hidden></label>
             <button id="sample-button" type="button">Sample crop</button><button id="orbit-button" type="button" hidden>Full observation</button><button id="download-source" type="button">Download original</button>
@@ -71,15 +71,19 @@
             <div class="story-step" id="sam-step"><span class="step-icon">2</span><div><strong>SAM 3 can trace fuller edges</strong><p id="sam-line">Optional after the image scan.</p></div></div>
             <div class="story-step" id="answer-step"><span class="step-icon">3</span><div><strong>Inspect the source pixels</strong><p id="answer-line">An outline alone cannot confirm a fan.</p></div></div>
 
-            <div id="results-area" class="results-area" hidden><div class="results-heading"><span>CANDIDATE REGIONS</span><span id="results-count"></span></div><div id="results-list" class="results-list"></div><details id="other-regions" class="other-regions" hidden><summary>Inspect <span id="other-regions-count"></span> other RF-DETR regions</summary><div id="other-results-list" class="results-list"></div></details></div>
-            <div id="candidate-detail" class="candidate-detail" hidden>
+            <div id="results-area" class="results-area" hidden><div class="results-heading"><span>CANDIDATE REGIONS</span><span id="results-count" role="status" aria-live="polite"></span></div><div id="results-list" class="results-list"></div><details id="other-regions" class="other-regions" hidden><summary>Show <span id="other-regions-count"></span> more proposals</summary><div id="other-results-list" class="results-list"></div></details></div>
+            <div id="candidate-detail" class="candidate-detail" role="region" aria-labelledby="detail-name" tabindex="-1" hidden>
               <div class="detail-title"><span id="detail-name"></span><strong id="detail-verdict"></strong></div>
               <p id="detail-explanation"></p>
               <div class="action-row"><button id="inspect-native" type="button">Inspect at 1:1</button><button id="refine-button" type="button">Trace selected with SAM 3</button></div>
               <label class="context-label">Context <select id="context-size"><option value="2.6">Standard</option><option value="4">Wider</option><option value="1.8">Tighter</option></select></label>
               <div class="evidence-view"><canvas id="source-evidence" aria-label="Native candidate context and optional fringe estimate"></canvas></div>
               <p id="evidence-caption" class="detail-timing"></p>
-              <div class="action-row" id="review-buttons"><button type="button" data-decision="accepted">Accept</button><button type="button" data-decision="rejected">Reject</button><button type="button" data-decision="unsure">Unsure</button><button type="button" data-decision="pending">Clear review</button></div>
+              <div class="review-choice" role="group" aria-label="Your decision about this proposal">
+                <p id="review-prompt">Inspect the source crop, then record your decision. These are your review labels, not model results.</p>
+                <div class="action-row" id="review-buttons"><button type="button" data-decision="accepted">Accept as fan</button><button type="button" data-decision="rejected">Reject as fan</button><button type="button" data-decision="unsure">Unsure</button></div>
+                <div class="review-navigation"><button id="next-unreviewed" type="button">Next unreviewed →</button><button id="clear-review" type="button">Clear decision</button></div>
+              </div>
               <details class="fringe-controls"><summary>Explore diffuse extent · experimental</summary>
                 <p>Estimate connected dark signal around this proposal. This is not a fan probability or a dust measurement.</p>
                 <label>Extent sensitivity <input id="fringe-sensitivity" type="range" min="0" max="100" value="45"></label>

@@ -193,7 +193,10 @@ test("scan IDs are idempotent and retries dispatch only unfinished tiles", async
         calls++;
         if (calls === 2 && fail)
           return { status: 502, body: { error: "offline" } };
-        return { status: 200, body: { predictions: [] } };
+        return { status: 200, body: { predictions: [{
+          confidence: 0.9,
+          points: [[20, 20], [120, 20], [120, 120], [20, 120]],
+        }] } };
       },
     });
     await store.init();
@@ -210,6 +213,7 @@ test("scan IDs are idempotent and retries dispatch only unfinished tiles", async
     assert.equal(job.status, "partial");
     assert.equal(calls, 2);
     assert.equal(reservations, 2);
+    const originalCandidateId = store.public(job).candidates[0].id;
     fail = false;
     const retry = await store.create({
       ...request,
@@ -220,6 +224,7 @@ test("scan IDs are idempotent and retries dispatch only unfinished tiles", async
     assert.equal(calls, 3);
     assert.equal(retry.status, "complete");
     assert.equal(store.public(retry).completed, 2);
+    assert.ok(store.public(retry).candidates.some((candidate) => candidate.id === originalCandidateId));
     await assert.rejects(
       () => store.create({ ...request, scale: 2 }),
       /different inputs/,
