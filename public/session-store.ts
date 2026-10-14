@@ -1,5 +1,5 @@
 const DB = "mars-fan-scout-native-v1";
-export type SavedSession = { run?: { id: string }; source?: { id: string }; [key: string]: unknown };
+export type SavedSession = { run?: { id: string } | null; source?: { id: string } | null; [key: string]: unknown };
 
 function open(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -29,15 +29,15 @@ export async function saveSession(value: SavedSession): Promise<void> {
     db.close();
   }
 }
-export async function loadSession(sourceId?: string): Promise<SavedSession | undefined> {
+export async function loadSession<T = SavedSession>(sourceId?: string): Promise<T | undefined> {
   const db = await open();
   try {
-    return await new Promise<SavedSession | undefined>((resolve, reject) => {
+    return await new Promise<T | undefined>((resolve, reject) => {
       const request = db
         .transaction("records")
         .objectStore("records")
         .get(sourceId ? `source:${sourceId}` : "session");
-      request.onsuccess = () => resolve(request.result as SavedSession | undefined);
+      request.onsuccess = () => resolve(request.result as T | undefined);
       request.onerror = () => reject(request.error);
     });
   } finally {

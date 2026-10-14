@@ -6,6 +6,9 @@ export type SourceMeta = Size & {
   display_sha256: string | null; original_format: string; preview: string;
   normalization: Record<string, unknown> | null;
   native_focus?: { x: number; y: number };
+  bit_depth?: number;
+  pixel_scale_m?: number | null;
+  original?: string;
 };
 export type RegionImage = {
   bytes: Buffer; region: Region; output: Size; encoding: "png";

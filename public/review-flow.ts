@@ -32,7 +32,7 @@ export function nextUnreviewed<T extends Identified>(candidates: T[], reviews: R
   return null;
 }
 
-export function setReview(reviews: ReviewMap, candidateId: string, decision: string, sourceHash: string, at: string): void {
+export function setReview(reviews: ReviewMap, candidateId: string, decision: string, sourceHash = "", at = ""): void {
   if (decision === "pending") {
     delete reviews[candidateId];
     return;
