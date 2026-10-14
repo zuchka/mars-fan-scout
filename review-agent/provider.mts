@@ -1,3 +1,6 @@
+import type { Evidence } from "./evidence.mjs";
+import type { ReviewCandidate } from "./types.js";
+
 export const MODEL_REPO = "akhilaaa3/Jev-Omni";
 export const MODEL_REVISION = "5addda86ddee081a68fb067477ea100c221b8917";
 export const MLX_SOURCE_REVISION = "c050d51354147985d13286cf4acf90f562f2c631";
@@ -52,7 +55,9 @@ export function makeJevProvider({ url, token = "", imageTokens = null, expectedR
   const metadata = { provider: "Jev-Omni", model: `${MODEL_REPO}@${expectedRevision}`, backend: expectedBackend,
     prompt_version: PROMPT_VERSION, options: OPTIONS, image_tokens: imageTokens === null ? null : Number(imageTokens),
     compute_usd_per_hour: hourly, cost_basis: hourly === null ? "Compute cost unmeasured; no OpenAI API charge" : "Request wall time times instance rate; not the provider bill" };
-  const provider = async ({ evidence, timeout_ms = maxCallMs }: { evidence: Evidence; timeout_ms?: number }) => {
+  const provider = async ({ evidence, timeout_ms = maxCallMs }: {
+    evidence: Evidence; timeout_ms?: number; candidate?: ReviewCandidate; wider?: boolean; firstAction?: unknown;
+  }) => {
     const started = performance.now();
     const limitMs = Math.max(1, Math.floor(Math.min(maxCallMs, timeout_ms)));
     const response = await fetchImpl(`${origin}/classify`, {
@@ -103,4 +108,3 @@ export function makeJevProvider({ url, token = "", imageTokens = null, expectedR
   };
   return provider;
 }
-import type { Evidence } from "./evidence.mjs";

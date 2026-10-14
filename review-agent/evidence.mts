@@ -36,6 +36,8 @@ function clipSquare(candidate: EvidenceCandidate, width: number, height: number,
 
 const svgEscape = (value: string | number) => String(value).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll('"', "&quot;");
 
+export function makeEvidence(imageBytes: Buffer, info: WorkingImageInfo, candidate: EvidenceCandidate, kind: "initial"): Promise<Evidence>;
+export function makeEvidence(imageBytes: Buffer, info: WorkingImageInfo, candidate: EvidenceCandidate, kind: "wider"): Promise<Evidence | null>;
 export async function makeEvidence(imageBytes: Buffer, info: WorkingImageInfo, candidate: EvidenceCandidate, kind: "initial" | "wider"): Promise<Evidence | null> {
   const box = clipSquare(candidate, info.width, info.height, kind === "wider" ? 2 : 1);
   const [x, y, x2, y2] = box.actual;

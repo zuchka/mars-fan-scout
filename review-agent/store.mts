@@ -2,18 +2,30 @@ import { randomUUID } from "node:crypto";
 import { mkdir, readdir, readFile, rename, writeFile, open, appendFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { imageInfo, sha256, validateCandidate } from "./evidence.mjs";
+import type { Evidence, EvidenceCandidate } from "./evidence.mjs";
+import type { HumanReview, ReviewCandidate, ReviewSession } from "./types.js";
 
 const idPattern = /^[a-f0-9-]{36}$/;
-const clean = value => typeof value === "string" ? value.slice(0, 300) : null;
+const clean = (value: unknown): string | null => typeof value === "string" ? value.slice(0, 300) : null;
+
+type CreateBody = {
+  image_base64: string; candidates: Array<EvidenceCandidate & { label?: string; arm?: string }>;
+  detector_responses?: unknown[]; demo?: boolean; original_sha256?: string; name?: string;
+  observation?: string; detector_model?: string; fixture_id?: string;
+};
+type ReviewBody = { candidate_id: string; decision: HumanReview["decision"]; stage: HumanReview["stage"];
+  reviewer: string; duration_ms?: number };
 
 export class ReviewStore {
-  constructor(root) { this.root = root; this.sessions = new Map(); }
+  root: string;
+  sessions: Map<string, ReviewSession>;
+  constructor(root: string) { this.root = root; this.sessions = new Map(); }
   async init() {
     await mkdir(this.root, { recursive: true, mode: 0o700 });
     for (const name of await readdir(this.root)) {
       if (!idPattern.test(name)) continue;
       try {
-        const session = JSON.parse(await readFile(resolve(this.root, name, "session.json"), "utf8"));
+        const session = JSON.parse(await readFile(resolve(this.root, name, "session.json"), "utf8")) as ReviewSession;
         for (const run of Object.values(session.runs || {})) {
           if (["queued", "running"].includes(run.status)) {
             run.status = "interrupted";
@@ -26,15 +38,15 @@ export class ReviewStore {
       } catch (_) { /* Corrupt sessions stay inaccessible rather than being guessed. */ }
     }
   }
-  get(id) { return idPattern.test(id || "") ? this.sessions.get(id) : null; }
-  path(id, file) { if (!idPattern.test(id)) throw new Error("Invalid session ID"); return resolve(this.root, id, file); }
-  async save(session) {
+  get(id: string): ReviewSession | null { return idPattern.test(id || "") ? this.sessions.get(id) ?? null : null; }
+  path(id: string, file: string): string { if (!idPattern.test(id)) throw new Error("Invalid session ID"); return resolve(this.root, id, file); }
+  async save(session: ReviewSession): Promise<void> {
     const path = this.path(session.id, "session.json");
     const tmp = path + "." + randomUUID() + ".tmp";
     await writeFile(tmp, JSON.stringify(session), { mode: 0o600 });
     await rename(tmp, path);
   }
-  async event(session, type, detail) {
+  async event(session: ReviewSession, type: string, detail: Record<string, unknown>) {
     const row = { at: new Date().toISOString(), type, ...detail };
     if (session.demo) {
       await appendFile(this.path(session.id, "events.jsonl"), JSON.stringify(row) + "\n", { mode: 0o600 });
@@ -47,16 +59,16 @@ export class ReviewStore {
     await this.save(session);
     return row;
   }
-  async create(body) {
+  async create(body: CreateBody): Promise<ReviewSession> {
     if (!body || typeof body.image_base64 !== "string" || body.image_base64.length > 56 * 1024 * 1024 || !Array.isArray(body.candidates) || body.candidates.length < 1 || body.candidates.length > 250) throw new Error("Invalid review session");
     if (!/^[A-Za-z0-9+/]+={0,2}$/.test(body.image_base64)) throw new Error("Invalid image encoding");
     const image = Buffer.from(body.image_base64, "base64");
     const info = await imageInfo(image);
-    const candidates = [];
-    const seen = new Set();
+    const candidates: ReviewCandidate[] = [];
+    const seen = new Set<string>();
     for (const [index, item] of body.candidates.entries()) {
       validateCandidate(item, info);
-      const polygon = item.polygon.map(point => point.map(Number));
+      const polygon = item.polygon.map(point => point.map(Number) as [number, number]);
       const confidence = Number(item.confidence);
       const canonical = JSON.stringify({ index, polygon, confidence });
       const id = sha256(info.sha256 + canonical).slice(0, 20);
@@ -69,7 +81,7 @@ export class ReviewStore {
     if (Buffer.byteLength(rawDetector) > 10 * 1024 * 1024) throw new Error("Detector snapshot exceeds 10 MB");
     const id = randomUUID();
     const snapshot_sha256 = sha256(JSON.stringify(candidates));
-    const session = { format: "mars-fan-scout-review-v4", id, created_at: new Date().toISOString(), demo: body.demo === true,
+    const session: ReviewSession = { format: "mars-fan-scout-review-v4", id, created_at: new Date().toISOString(), demo: body.demo === true,
       image: { ...info, original_sha256: clean(body.original_sha256), name: clean(body.name), observation: clean(body.observation) },
       snapshot_sha256, detector_model: clean(body.detector_model), detector_responses_sha256: sha256(rawDetector),
       fixture_id: clean(body.fixture_id), candidates, runs: {}, reviews: {}, evidence: {}, idempotency: {} };
@@ -80,8 +92,8 @@ export class ReviewStore {
     await this.event(session, "session_created", { snapshot_sha256, candidate_count: candidates.length });
     return session;
   }
-  async source(session) { return readFile(this.path(session.id, "working-image." + (session.image.format === "png" ? "png" : "jpg"))); }
-  async saveEvidence(session, evidence) {
+  async source(session: ReviewSession) { return readFile(this.path(session.id, "working-image." + (session.image.format === "png" ? "png" : "jpg"))); }
+  async saveEvidence(session: ReviewSession, evidence: Evidence) {
     const id = randomUUID();
     const sourceName = `${id}-source.jpg`, overlayName = `${id}-mask.jpg`;
     await Promise.all([
@@ -90,7 +102,7 @@ export class ReviewStore {
     ]);
     return { id, ...evidence.meta, source_name: sourceName, overlay_name: overlayName };
   }
-  async review(session, body) {
+  async review(session: ReviewSession, body: ReviewBody): Promise<HumanReview> {
     const candidate = session.candidates.find(item => item.id === body?.candidate_id);
     if (!candidate || !["accepted", "rejected", "unsure"].includes(body.decision) || !["reference", "timed", "adjudication"].includes(body.stage)) throw new Error("Invalid human review");
     if (typeof body.reviewer !== "string" || !/^[a-zA-Z0-9_-]{1,32}$/.test(body.reviewer)) throw new Error("Invalid reviewer ID");
@@ -103,8 +115,8 @@ export class ReviewStore {
       if (session.reviews[key].decision !== body.decision) throw new Error("This review is already saved; revisions require a new adjudication record");
       return session.reviews[key];
     }
-    const duration_ms = Number.isFinite(body.duration_ms) && body.duration_ms >= 0 && body.duration_ms <= 3600000 ? Math.round(body.duration_ms) : null;
-    const record = { candidate_id: candidate.id, stage: body.stage, reviewer: body.reviewer, decision: body.decision, duration_ms,
+    const duration_ms = typeof body.duration_ms === "number" && Number.isFinite(body.duration_ms) && body.duration_ms >= 0 && body.duration_ms <= 3600000 ? Math.round(body.duration_ms) : null;
+    const record: HumanReview = { candidate_id: candidate.id, stage: body.stage, reviewer: body.reviewer, decision: body.decision, duration_ms,
       arm: candidate.arm, at: new Date().toISOString() };
     session.reviews[key] = record;
     await this.event(session, "human_review", record);

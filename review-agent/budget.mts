@@ -40,10 +40,10 @@ export class ReviewBudget {
     this.persist();
     return true;
   }
-  reconcile(id: string, cost: number): void {
+  reconcile(id: string, cost: number | null): void {
     this.day();
     const item = this.state.reservations[id];
-    if (!item || !Number.isFinite(cost) || cost < 0) return;
+    if (!item || cost === null || !Number.isFinite(cost) || cost < 0) return;
     item.cost_usd = cost;
     this.state.spent_usd += cost - item.reserved_usd;
     this.persist();
