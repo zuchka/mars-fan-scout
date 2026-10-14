@@ -1,0 +1,27 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "lib": ["ES2023", "DOM"],
+    "types": ["node"],
+    "strict": true,
+    "noEmit": true,
+    "allowJs": true,
+    "checkJs": false,
+    "skipLibCheck": true,
+    "noUncheckedIndexedAccess": false
+  },
+  "include": [
+    "public/**/*.ts",
+    "public/**/*.mts",
+    "scout/**/*.ts",
+    "scout/**/*.mts",
+    "review-agent/**/*.ts",
+    "review-agent/**/*.mts",
+    "cloudflare/**/*.ts",
+    "server.mts",
+    "demo-access.mts"
+  ],
+  "exclude": ["node_modules"]
+}

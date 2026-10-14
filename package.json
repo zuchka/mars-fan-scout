@@ -7,8 +7,10 @@
     "node": ">=20.9.0"
   },
   "scripts": {
-    "start": "node server.mjs",
-    "test": "node --test scripts/*.test.mjs",
+    "build": "node scripts/build.mjs",
+    "typecheck": "tsc --noEmit",
+    "start": "npm run build --silent && node server.mjs",
+    "test": "npm run build --silent && npm run typecheck --silent && node --test scripts/*.test.mjs",
     "prepare:agent-review": "node scripts/prepare_agent_review.mjs",
     "report:agent-review": "node scripts/report_agent_review.mjs",
     "purge:agent-review": "node scripts/purge_review_sessions.mjs",
@@ -30,5 +32,10 @@
   "dependencies": {
     "fflate": "0.8.3",
     "sharp": "0.35.5"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "esbuild": "^0.28.2",
+    "typescript": "^7.0.2"
   }
 }
