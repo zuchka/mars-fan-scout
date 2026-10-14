@@ -1,5 +1,7 @@
 const DB = "mars-fan-scout-native-v1";
-function open() {
+export type SavedSession = { run?: { id: string }; source?: { id: string }; [key: string]: unknown };
+
+function open(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DB, 1);
     request.onupgradeneeded = () => request.result.createObjectStore("records");
@@ -7,10 +9,10 @@ function open() {
     request.onerror = () => reject(request.error);
   });
 }
-export async function saveSession(value) {
+export async function saveSession(value: SavedSession): Promise<void> {
   const db = await open();
   try {
-    await new Promise((resolve, reject) => {
+    await new Promise<void>((resolve, reject) => {
       const transaction = db.transaction("records", "readwrite");
       transaction.objectStore("records").put(value, "session");
       if (value.run?.id)
@@ -19,7 +21,7 @@ export async function saveSession(value) {
         transaction
           .objectStore("records")
           .put(value, `source:${value.source.id}`);
-      transaction.oncomplete = resolve;
+      transaction.oncomplete = () => resolve();
       transaction.onerror = () => reject(transaction.error);
       transaction.onabort = () => reject(transaction.error);
     });
@@ -27,15 +29,15 @@ export async function saveSession(value) {
     db.close();
   }
 }
-export async function loadSession(sourceId) {
+export async function loadSession(sourceId?: string): Promise<SavedSession | undefined> {
   const db = await open();
   try {
-    return await new Promise((resolve, reject) => {
+    return await new Promise<SavedSession | undefined>((resolve, reject) => {
       const request = db
         .transaction("records")
         .objectStore("records")
         .get(sourceId ? `source:${sourceId}` : "session");
-      request.onsuccess = () => resolve(request.result);
+      request.onsuccess = () => resolve(request.result as SavedSession | undefined);
       request.onerror = () => reject(request.error);
     });
   } finally {

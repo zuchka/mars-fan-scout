@@ -1,8 +1,32 @@
 import { clipRegion } from "./geometry.js";
+import type { Region } from "./types.js";
+import type { SourceMeta } from "../scout/types.js";
+
 export class ImageViewer {
-  constructor(frame, canvas, overlay, fetchRegion, onChange) {
-    Object.assign(this, { frame, canvas, overlay, fetchRegion, onChange });
-    this.ctx = canvas.getContext("2d");
+  frame: HTMLElement;
+  canvas: HTMLCanvasElement;
+  overlay: SVGSVGElement;
+  fetchRegion: (region: Region, max: number) => Promise<Blob>;
+  onChange?: (error?: string) => void;
+  ctx: CanvasRenderingContext2D;
+  token: number;
+  zoom: number;
+  offset: { x: number; y: number };
+  source: SourceMeta | null = null;
+  preview: ImageBitmap | null = null;
+  regionImage: { bitmap: ImageBitmap; region: Region } | null = null;
+  drag: { x: number; y: number; ox: number; oy: number } | null = null;
+  timer: ReturnType<typeof setTimeout> | undefined;
+  loading = false;
+
+  constructor(frame: HTMLElement, canvas: HTMLCanvasElement, overlay: SVGSVGElement,
+    fetchRegion: ImageViewer["fetchRegion"], onChange?: ImageViewer["onChange"]) {
+    this.frame = frame;
+    this.canvas = canvas;
+    this.overlay = overlay;
+    this.fetchRegion = fetchRegion;
+    this.onChange = onChange;
+    this.ctx = canvas.getContext("2d")!;
     this.token = 0;
     this.zoom = 1;
     this.offset = { x: 0, y: 0 };
@@ -54,16 +78,16 @@ export class ImageViewer {
       if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key)) {
         e.preventDefault();
         this.offset.x +=
-          ({ ArrowLeft: -100, ArrowRight: 100 }[e.key] || 0) / this.zoom;
+          (({ ArrowLeft: -100, ArrowRight: 100 } as Record<string, number>)[e.key] || 0) / this.zoom;
         this.offset.y +=
-          ({ ArrowUp: -100, ArrowDown: 100 }[e.key] || 0) / this.zoom;
+          (({ ArrowUp: -100, ArrowDown: 100 } as Record<string, number>)[e.key] || 0) / this.zoom;
         this.clamp();
         this.draw();
         this.queue();
       }
     });
   }
-  async setSource(source, preview) {
+  async setSource(source: SourceMeta, preview: ImageBitmap): Promise<void> {
     this.token++;
     this.source = source;
     this.preview?.close();
@@ -83,7 +107,7 @@ export class ImageViewer {
     this.draw();
     this.queue();
   }
-  native(point) {
+  native(point: { x: number; y: number } | null = null): void {
     if (!this.source) return;
     const center = point || {
       x: this.offset.x + this.frame.clientWidth / this.zoom / 2,
@@ -101,7 +125,7 @@ export class ImageViewer {
     this.queue();
   }
   scaleAt(
-    factor,
+    factor: number,
     x = this.frame.clientWidth / 2,
     y = this.frame.clientHeight / 2,
   ) {
@@ -122,13 +146,13 @@ export class ImageViewer {
     const vw = this.frame.clientWidth / this.zoom,
       vh = this.frame.clientHeight / this.zoom;
     this.offset.x =
-      vw > this.source.width
-        ? (this.source.width - vw) / 2
-        : Math.max(0, Math.min(this.source.width - vw, this.offset.x));
+      vw > this.source!.width
+        ? (this.source!.width - vw) / 2
+        : Math.max(0, Math.min(this.source!.width - vw, this.offset.x));
     this.offset.y =
-      vh > this.source.height
-        ? (this.source.height - vh) / 2
-        : Math.max(0, Math.min(this.source.height - vh, this.offset.y));
+      vh > this.source!.height
+        ? (this.source!.height - vh) / 2
+        : Math.max(0, Math.min(this.source!.height - vh, this.offset.y));
   }
   visible() {
     return clipRegion(
@@ -138,7 +162,7 @@ export class ImageViewer {
         width: this.frame.clientWidth / this.zoom,
         height: this.frame.clientHeight / this.zoom,
       },
-      this.source,
+      this.source!,
     );
   }
   draw() {
@@ -171,7 +195,7 @@ export class ImageViewer {
     const token = ++this.token;
     this.timer = setTimeout(() => this.loadRegion(token), 180);
   }
-  async loadRegion(token, attempt = 0) {
+  async loadRegion(token: number, attempt = 0): Promise<void> {
     if (token !== this.token) return;
     // One in-flight viewport decode per viewer; subsequent pans replace the target.
     if (this.loading) {
@@ -204,7 +228,7 @@ export class ImageViewer {
       this.draw();
     } catch (error) {
       if (token === this.token) {
-        this.onChange?.(error.message);
+        this.onChange?.(error instanceof Error ? error.message : String(error));
         if (attempt < 2)
           this.timer = setTimeout(
             () => this.loadRegion(token, attempt + 1),
