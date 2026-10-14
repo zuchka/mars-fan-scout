@@ -1,7 +1,19 @@
 import { existsSync, readFileSync, writeFileSync, renameSync } from "node:fs";
 
+type Reservation = { run_id: string; reserved_usd: number; cost_usd: number | null; at: string };
+type BudgetState = { day: string; calls: number; spent_usd: number; reservations: Record<string, Reservation> };
+
 export class ReviewBudget {
-  constructor(path, { dailyCallLimit, dailyUsdLimit, perRunUsdLimit, reservationUsd = 0.01 }) {
+  path: string;
+  dailyCallLimit: number;
+  dailyUsdLimit: number;
+  perRunUsdLimit: number;
+  reservationUsd: number;
+  state: BudgetState;
+
+  constructor(path: string, { dailyCallLimit, dailyUsdLimit, perRunUsdLimit, reservationUsd = 0.01 }: {
+    dailyCallLimit: number; dailyUsdLimit?: number; perRunUsdLimit?: number; reservationUsd?: number;
+  }) {
     this.path = path;
     this.dailyCallLimit = Number(dailyCallLimit || 0);
     this.dailyUsdLimit = Number(dailyUsdLimit || 0);
@@ -16,7 +28,7 @@ export class ReviewBudget {
     const today = new Date().toISOString().slice(0, 10);
     if (this.state.day !== today) { this.state = { day: today, calls: 0, spent_usd: 0, reservations: {} }; this.persist(); }
   }
-  reserve(id, runId, amount = this.reservationUsd) {
+  reserve(id: string, runId: string, amount = this.reservationUsd): boolean {
     this.day();
     if (!this.enabled || this.state.calls >= this.dailyCallLimit || (this.reservationUsd > 0 && this.state.spent_usd + amount > this.dailyUsdLimit + 1e-9)) return false;
     const runHeld = Object.values(this.state.reservations).filter(item => item.run_id === runId).reduce((sum, item) => sum + item.reserved_usd, 0);
@@ -28,7 +40,7 @@ export class ReviewBudget {
     this.persist();
     return true;
   }
-  reconcile(id, cost) {
+  reconcile(id: string, cost: number): void {
     this.day();
     const item = this.state.reservations[id];
     if (!item || !Number.isFinite(cost) || cost < 0) return;

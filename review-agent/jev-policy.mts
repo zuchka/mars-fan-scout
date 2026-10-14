@@ -1,8 +1,9 @@
 import { OPTIONS, validatePrediction } from "./provider.mjs";
+import type { JevPrediction } from "./provider.mjs";
 
 export const POLICY_VERSION = "jev-triage-1";
 
-export function reviewDecision(raw, { wider = false, minProbability = 0.8, minMargin = 0.25 } = {}) {
+export function reviewDecision(raw: JevPrediction, { wider = false, minProbability = 0.8, minMargin = 0.25 } = {}) {
   const { prediction, probabilities } = validatePrediction(raw);
   if (![minProbability, minMargin].every(value => Number.isFinite(value) && value >= 0 && value <= 1)) throw new Error("Invalid Jev review thresholds");
   const sorted = OPTIONS.map(option => probabilities[option]).sort((a, b) => b - a);

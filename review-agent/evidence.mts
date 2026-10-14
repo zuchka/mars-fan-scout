@@ -1,18 +1,29 @@
 import sharp from "sharp";
 import { createHash } from "node:crypto";
+import type { Point } from "../public/types.js";
 
-export const sha256 = value => createHash("sha256").update(value).digest("hex");
+export type WorkingImageInfo = { format: "png" | "jpeg"; width: number; height: number; sha256: string };
+export type EvidenceCandidate = { polygon: Point[]; confidence: number };
+export type Evidence = {
+  pixels: Buffer;
+  overlay: Buffer;
+  meta: { kind: "initial" | "wider"; overlay_style: string; requested_bounds_px: number[];
+    actual_bounds_px: number[]; clipped: boolean; output_width: number; output_height: number;
+    scale_x: number; scale_y: number; source_sha256: string; overlay_sha256: string };
+};
 
-export async function imageInfo(bytes) {
+export const sha256 = (value: string | Uint8Array): string => createHash("sha256").update(value).digest("hex");
+
+export async function imageInfo(bytes: Buffer): Promise<WorkingImageInfo> {
   if (bytes.length > 40 * 1024 * 1024) throw new Error("Working image exceeds 40 MB");
   const { format, width, height } = await sharp(bytes, { limitInputPixels: 3072 * 3072 }).metadata();
   if (!["png", "jpeg"].includes(format) || !width || !height || width < 256 || height < 256 || width > 3072 || height > 3072) {
     throw new Error("Expected a PNG or JPEG working image between 256 and 3072 pixels per side");
   }
-  return { format, width, height, sha256: sha256(bytes) };
+  return { format: format as "png" | "jpeg", width, height, sha256: sha256(bytes) };
 }
 
-function clipSquare(candidate, width, height, factor) {
+function clipSquare(candidate: EvidenceCandidate, width: number, height: number, factor: number) {
   const xs = candidate.polygon.map(point => point[0]);
   const ys = candidate.polygon.map(point => point[1]);
   const left = Math.min(...xs), right = Math.max(...xs), top = Math.min(...ys), bottom = Math.max(...ys);
@@ -23,9 +34,9 @@ function clipSquare(candidate, width, height, factor) {
   return { requested: [cx - side / 2, cy - side / 2, cx + side / 2, cy + side / 2], actual: [x, y, x2, y2], clipped: x === 0 || y === 0 || x2 === width || y2 === height };
 }
 
-const svgEscape = value => String(value).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll('"', "&quot;");
+const svgEscape = (value: string | number) => String(value).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll('"', "&quot;");
 
-export async function makeEvidence(imageBytes, info, candidate, kind) {
+export async function makeEvidence(imageBytes: Buffer, info: WorkingImageInfo, candidate: EvidenceCandidate, kind: "initial" | "wider"): Promise<Evidence | null> {
   const box = clipSquare(candidate, info.width, info.height, kind === "wider" ? 2 : 1);
   const [x, y, x2, y2] = box.actual;
   if (kind === "wider") {
@@ -48,12 +59,12 @@ export async function makeEvidence(imageBytes, info, candidate, kind) {
   return { pixels, overlay, meta: { kind, overlay_style: "region_pointer_v2", requested_bounds_px: box.requested, actual_bounds_px: box.actual, clipped: box.clipped, output_width: outWidth, output_height: outHeight, scale_x: outWidth / width, scale_y: outHeight / height, source_sha256: sha256(pixels), overlay_sha256: sha256(overlay) } };
 }
 
-async function imageInfoForCrop(bytes, width, height) {
+async function imageInfoForCrop(bytes: Buffer, width: number, height: number): Promise<void> {
   const info = await sharp(bytes).metadata();
   if (info.width !== width || info.height !== height) throw new Error("Crop verification failed");
 }
 
-export function validateCandidate(candidate, info) {
+export function validateCandidate(candidate: EvidenceCandidate, info: WorkingImageInfo): void {
   if (!candidate || !Array.isArray(candidate.polygon) || candidate.polygon.length < 3 || candidate.polygon.length > 1024 || !Number.isFinite(candidate.confidence) || candidate.confidence < 0 || candidate.confidence > 1) throw new Error("Invalid candidate");
   if (!candidate.polygon.every(point => Array.isArray(point) && point.length === 2 && Number.isFinite(point[0]) && Number.isFinite(point[1]) && point[0] >= 0 && point[1] >= 0 && point[0] <= info.width && point[1] <= info.height)) throw new Error("Candidate lies outside working image");
 }
