@@ -1,5 +1,9 @@
 import { inside } from "./geometry.js";
-function quantile(values, p) {
+import type { Point } from "./types.js";
+
+export type FringeEdit = { x: number; y: number; label: "include" | "exclude" };
+
+function quantile(values: number[], p: number): number {
   if (!values.length) return 0;
   values.sort((a, b) => a - b);
   return values[
@@ -13,7 +17,7 @@ export function estimateFringe({
   polygon,
   points = [],
   sensitivity = 0.45,
-}) {
+}: { gray: Uint8Array | Uint8ClampedArray; width: number; height: number; polygon: Point[]; points?: FringeEdit[]; sensitivity?: number }) {
   const n = width * height;
   if (
     ![width, height].every((v) => Number.isInteger(v) && v > 0) ||
@@ -75,7 +79,7 @@ export function estimateFringe({
         x++
       )
         blocked[y * width + x] = 1;
-  const seed = (i) => {
+  const seed = (i: number) => {
     if (!blocked[i] && !alpha[i]) {
       alpha[i] = Math.max(1, Math.round(signal[i] * 255));
       queue[tail++] = i;
@@ -112,12 +116,12 @@ export function estimateFringe({
     )
       edge = true;
   }
-  const areaAt = (threshold) => {
+  const areaAt = (threshold: number) => {
     const seen = new Uint8Array(n),
       pending = new Int32Array(n);
     let start = 0,
       end = 0;
-    const add = (i) => {
+    const add = (i: number) => {
       if (!seen[i] && !blocked[i]) {
         seen[i] = 1;
         pending[end++] = i;

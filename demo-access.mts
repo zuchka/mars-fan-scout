@@ -1,19 +1,21 @@
 import { timingSafeEqual } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
 
-export function createDemoAccess({ code = "", dailyLimit = 0, usagePath, now = () => new Date() }) {
+export function createDemoAccess({ code = "", dailyLimit = 0, usagePath, now = () => new Date() }: {
+  code?: string; dailyLimit?: number; usagePath: string; now?: () => Date;
+}) {
   const expected = Buffer.from(code);
-  let usage = null;
+  let usage: { day: string; count: number } | null = null;
   if (dailyLimit > 0) {
     try {
       const saved = JSON.parse(readFileSync(usagePath, "utf8"));
       if (typeof saved.day === "string" && Number.isSafeInteger(saved.count) && saved.count >= 0) usage = saved;
     } catch (error) {
-      if (error.code !== "ENOENT") throw error;
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
     }
   }
 
-  function authorized(value) {
+  function authorized(value: unknown): boolean {
     if (!expected.length) return true;
     if (typeof value !== "string") return false;
     const supplied = Buffer.from(value);

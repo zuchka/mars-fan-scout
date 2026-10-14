@@ -15,3 +15,11 @@ data/
 .jev-venv/
 .models/
 .scout/
+# Browser and server JavaScript generated from TypeScript.
+public/*.js
+public/*.mjs
+scout/*.mjs
+review-agent/*.mjs
+cloudflare/*.js
+server.mjs
+demo-access.mjs

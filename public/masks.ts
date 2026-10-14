@@ -1,13 +1,15 @@
+import type { RLE } from "./types.js";
+
 // COCO RLE runs alternate background/foreground in column-major order.
 // Keep the provider's RLE for export; rasterization never drops holes/components.
-export function decodeRLE(rle, maxPixels = 16_777_216) {
+export function decodeRLE(rle: RLE, maxPixels = 16_777_216) {
   const [height, width] = rle?.size || [];
   if (
     ![height, width].every((n) => Number.isInteger(n) && n > 0) ||
     width * height > maxPixels
   )
     throw new Error("Invalid mask dimensions");
-  let counts = rle.counts;
+  let counts: number[] | string = rle.counts;
   if (typeof counts === "string") {
     const encoded = counts;
     counts = [];
@@ -49,7 +51,7 @@ export function decodeRLE(rle, maxPixels = 16_777_216) {
   return { pixels, width, height };
 }
 
-export function encodeRLE(pixels, width, height) {
+export function encodeRLE(pixels: Uint8Array, width: number, height: number): RLE {
   if (pixels.length !== width * height)
     throw new Error("Mask dimensions do not match");
   const counts = [0];
@@ -66,7 +68,7 @@ export function encodeRLE(pixels, width, height) {
   return { size: [height, width], counts };
 }
 
-export function maskRGBA(rle, opacity = 0.2) {
+export function maskRGBA(rle: RLE, opacity = 0.2) {
   const { pixels, width, height } = decodeRLE(rle);
   const rgba = new Uint8ClampedArray(pixels.length * 4);
   for (let y = 0; y < height; y++)

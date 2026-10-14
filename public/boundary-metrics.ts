@@ -1,10 +1,21 @@
 import { decodeRLE } from "./masks.js";
 import { bounds, inside } from "./geometry.js";
+import type { Point, Region, RLE } from "./types.js";
+
+export type BoundaryGeometry = { rle?: RLE; region?: Region; polygon?: Point[]; polygons?: Point[][] };
+export type BoundaryAnnotation = {
+  format: string;
+  source: Region & { original_sha256: string; observation: string };
+  coverage_complete?: boolean;
+  reviewer?: string;
+  second_reviewer?: string;
+  instances: Array<{ id: string; class: string; core: BoundaryGeometry; envelope: BoundaryGeometry; visible?: BoundaryGeometry }>;
+};
 
 export function rasterGeometry(
-  geometry,
-  width,
-  height,
+  geometry: BoundaryGeometry,
+  width: number,
+  height: number,
   region = { x: 0, y: 0, width, height },
 ) {
   const output = new Uint8Array(width * height);
@@ -66,13 +77,13 @@ export function rasterGeometry(
 }
 
 export function boundaryMetrics(
-  prediction,
-  core,
-  envelope,
-  unknown,
-  width,
-  height,
-  visible = null,
+  prediction: Uint8Array,
+  core: Uint8Array,
+  envelope: Uint8Array,
+  unknown: Uint8Array,
+  width: number,
+  height: number,
+  visible: Uint8Array | null = null,
   tolerance = 2,
 ) {
   let corePixels = 0,
@@ -101,8 +112,12 @@ export function boundaryMetrics(
     else if (prediction[i]) fp++;
     else if (actual) fn++;
   }
-  const ratio = (a, b) => (b ? a / b : null);
-  const result = {
+  const ratio = (a: number, b: number): number | null => (b ? a / b : null);
+  const result: {
+    core_pixels: number; core_omission: number | null; predicted_evaluable_pixels: number;
+    background_leakage: number | null; evaluable_pixels: number; iou: number | null;
+    dice: number | null; boundary_f1: number | null;
+  } = {
     core_pixels: corePixels,
     core_omission: ratio(missed, corePixels),
     predicted_evaluable_pixels: predicted,
@@ -113,7 +128,7 @@ export function boundaryMetrics(
     boundary_f1: null,
   };
   if (visible) {
-    const edge = (mask) => {
+    const edge = (mask: Uint8Array) => {
       const result = new Uint8Array(mask.length);
       for (let y = 0; y < height; y++)
         for (let x = 0; x < width; x++) {
@@ -151,7 +166,7 @@ export function boundaryMetrics(
     };
     const a = edge(prediction),
       b = edge(visible);
-    const matched = (one, two) => {
+    const matched = (one: Uint8Array, two: Uint8Array) => {
       let total = 0,
         match = 0;
       for (let i = 0; i < one.length; i++)
@@ -195,7 +210,7 @@ export function boundaryMetrics(
   return result;
 }
 
-export function validateAnnotation(annotation, { complete = true } = {}) {
+export function validateAnnotation(annotation: BoundaryAnnotation, { complete = true } = {}): BoundaryAnnotation {
   if (annotation.format !== "mars-boundary-review-v1")
     throw new Error("Expected mars-boundary-review-v1");
   const s = annotation.source;
@@ -254,9 +269,9 @@ export function validateAnnotation(annotation, { complete = true } = {}) {
   return annotation;
 }
 
-export function matchInstances(predictions, truth, threshold = 0.25) {
+export function matchInstances(predictions: Uint8Array[], truth: Uint8Array[], threshold = 0.25) {
   // Maximum-cardinality one-to-one matching; strongest overlap tried first.
-  const overlap = (a, b) => {
+  const overlap = (a: Uint8Array, b: Uint8Array) => {
     let intersection = 0,
       union = 0;
     for (let i = 0; i < a.length; i++) {
@@ -271,12 +286,12 @@ export function matchInstances(predictions, truth, threshold = 0.25) {
       .filter((x) => x.iou >= threshold)
       .sort((a, b) => b.iou - a.iou),
   );
-  const owners = new Map();
-  const assign = (p, seen) => {
+  const owners = new Map<number, number>();
+  const assign = (p: number, seen: Set<number>): boolean => {
     for (const { i } of neighbors[p])
       if (!seen.has(i)) {
         seen.add(i);
-        if (!owners.has(i) || assign(owners.get(i), seen)) {
+        if (!owners.has(i) || assign(owners.get(i)!, seen)) {
           owners.set(i, p);
           return true;
         }
@@ -287,6 +302,6 @@ export function matchInstances(predictions, truth, threshold = 0.25) {
   return [...owners].map(([truth, prediction]) => ({
     truth,
     prediction,
-    iou: neighbors[prediction].find((n) => n.i === truth).iou,
+    iou: neighbors[prediction].find((n) => n.i === truth)!.iou,
   }));
 }

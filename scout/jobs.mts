@@ -9,7 +9,24 @@ import {
   mergeCandidates,
 } from "../public/geometry.js";
 import { polygonArea } from "../public/candidates.js";
+import type { Proposal } from "../public/types.js";
+import type { createDemoAccess } from "../demo-access.mjs";
+import type { ModelResponse, ScanJob, ScanRequest, ScanTile } from "./types.js";
+import type { SourceStore } from "./source-store.mjs";
 export class ScanJobs {
+  directory: string;
+  sources: SourceStore;
+  access: ReturnType<typeof createDemoAccess>;
+  infer: (image: Buffer) => Promise<ModelResponse>;
+  refine: (request: { image: Buffer; width: number; height: number;
+    boxes: Array<{ box: ScanJob["box"] }>; format: "rle" }) => Promise<ModelResponse>;
+  modelId: string;
+  concurrency: number;
+  jobs: Map<string, ScanJob>;
+  saves: Map<string, Promise<void>>;
+  running: number;
+  pumping: boolean;
+
   constructor({
     directory,
     sources,
@@ -18,16 +35,15 @@ export class ScanJobs {
     refine,
     modelId,
     concurrency = 2,
-  }) {
-    Object.assign(this, {
-      directory,
-      sources,
-      access,
-      infer,
-      refine,
-      modelId,
-      concurrency,
-    });
+  }: { directory: string; sources: SourceStore; access: ReturnType<typeof createDemoAccess>;
+    infer: ScanJobs["infer"]; refine: ScanJobs["refine"]; modelId: string; concurrency?: number }) {
+    this.directory = directory;
+    this.sources = sources;
+    this.access = access;
+    this.infer = infer;
+    this.refine = refine;
+    this.modelId = modelId;
+    this.concurrency = concurrency;
     this.jobs = new Map();
     this.saves = new Map();
     this.running = 0;
@@ -37,9 +53,9 @@ export class ScanJobs {
     await mkdir(this.directory, { recursive: true });
     for (const name of await readdir(this.directory))
       if (/^[a-f0-9-]{36}\.json$/.test(name)) {
-        let job;
+        let job: ScanJob;
         try {
-          job = JSON.parse(await readFile(join(this.directory, name), "utf8"));
+          job = JSON.parse(await readFile(join(this.directory, name), "utf8")) as ScanJob;
           if (job.id + ".json" !== name || !Array.isArray(job.tiles))
             throw new Error("Invalid saved job");
         } catch {
@@ -65,7 +81,7 @@ export class ScanJobs {
         await this.save(job);
       }
   }
-  save(job) {
+  save(job: ScanJob): Promise<void> {
     const snapshot = JSON.stringify(job),
       previous = this.saves.get(job.id) || Promise.resolve();
     const next = previous
@@ -78,7 +94,7 @@ export class ScanJobs {
     this.saves.set(job.id, next);
     return next;
   }
-  async create(body) {
+  async create(body: ScanRequest): Promise<ScanJob> {
     if (!/^[a-f0-9-]{36}$/.test(body.id || ""))
       throw new Error("A unique request ID is required");
     const source = await this.sources.meta(body.source_id);
@@ -98,14 +114,14 @@ export class ScanJobs {
       provider_internal_resolution: null,
       mask_format: kind === "refine" ? "rle" : "polygon",
     };
-    const config = {
+    const config: Pick<ScanJob, "source_id" | "source_sha256" | "model_id" | "kind" | "region" | "scale" | "box" | "analysis" | "pipeline" | "retry_of"> = {
       source_id: source.id,
       source_sha256: source.original_sha256,
       model_id: kind === "scan" ? this.modelId : "sam3/visual_segment",
       kind,
       region,
       scale,
-      box: kind === "refine" ? body.box : null,
+      box: kind === "refine" ? body.box ?? null : null,
       analysis,
       pipeline: "native-v1",
       retry_of: body.retry_of || null,
@@ -134,7 +150,7 @@ export class ScanJobs {
     }
     const fingerprint = sha(Buffer.from(JSON.stringify(config)));
     if (this.jobs.has(body.id)) {
-      const existing = this.jobs.get(body.id);
+      const existing = this.jobs.get(body.id)!;
       if (existing.fingerprint !== fingerprint)
         throw new Error("Request ID is already used for different inputs");
       return existing;
@@ -145,7 +161,7 @@ export class ScanJobs {
       ).length >= 4
     )
       throw new Error("Four jobs are already active. Wait or cancel a scan");
-    let tiles = (
+    let tiles: ScanTile[] = (
       kind === "scan"
         ? tilesForRegion(region, scale)
         : [{ ...region, scale: 1 }]
@@ -172,7 +188,7 @@ export class ScanJobs {
         throw new Error("Retry must match a finished job and its settings");
       tiles = tiles.map((t) =>
         previous.tiles.find((p) => p.id === t.id)?.status === "complete"
-          ? structuredClone(previous.tiles.find((p) => p.id === t.id))
+          ? structuredClone(previous.tiles.find((p) => p.id === t.id)!)
           : t,
       );
     }
@@ -182,7 +198,7 @@ export class ScanJobs {
       throw new Error(
         `This scan needs ${needed} requests; ${remaining} remain today`,
       );
-    const job = {
+    const job: ScanJob = {
       id: body.id,
       ...config,
       fingerprint,
@@ -201,7 +217,7 @@ export class ScanJobs {
     void this.pump();
     return job;
   }
-  async cancel(id) {
+  async cancel(id: string): Promise<ScanJob> {
     const job = this.jobs.get(id);
     if (!job) throw new Error("Unknown job");
     if (["queued", "running"].includes(job.status)) {
@@ -224,15 +240,15 @@ export class ScanJobs {
             j.tiles.some((t) => t.status === "queued"),
         );
         if (!job) break;
-        const tile = job.tiles.find((t) => t.status === "queued");
+        const tile = job.tiles.find((t) => t.status === "queued")!;
         tile.status = "running";
         job.status = "running";
         this.running++;
         void this.execute(job, tile)
-          .catch((error) => {
+          .catch((error: unknown) => {
             job.status = "failed";
             tile.status = "failed";
-            tile.error = `Job persistence failed: ${error.message}`;
+            tile.error = `Job persistence failed: ${error instanceof Error ? error.message : String(error)}`;
           })
           .finally(() => {
             this.running--;
@@ -243,7 +259,7 @@ export class ScanJobs {
       this.pumping = false;
     }
   }
-  async execute(job, tile) {
+  async execute(job: ScanJob, tile: ScanTile): Promise<void> {
     try {
       tile.started_at = new Date().toISOString();
       await this.save(job);
@@ -290,7 +306,7 @@ export class ScanJobs {
       tile.finished_at = new Date().toISOString();
     } catch (error) {
       tile.status = "failed";
-      tile.error = String(error.message || error);
+      tile.error = String(error instanceof Error ? error.message : error);
       tile.finished_at = new Date().toISOString();
     } finally {
       if (
@@ -307,19 +323,20 @@ export class ScanJobs {
       await this.save(job);
     }
   }
-  public(job) {
+  public(job: ScanJob | null): ScanJob & { candidates: Array<Proposal & { duplicate_ids: string[] }>;
+    completed: number; total: number; in_flight: number; daily_remaining: number | null } {
     if (!job) throw new Error("Unknown job");
     let candidateOrigin = job;
-    const ancestors = new Set();
+    const ancestors = new Set<string>();
     while (candidateOrigin.retry_of && this.jobs.has(candidateOrigin.retry_of) &&
       !ancestors.has(candidateOrigin.retry_of)) {
       ancestors.add(candidateOrigin.id);
-      candidateOrigin = this.jobs.get(candidateOrigin.retry_of);
+      candidateOrigin = this.jobs.get(candidateOrigin.retry_of)!;
     }
-    const candidates = [];
+    const candidates: Proposal[] = [];
     if (job.kind === "scan")
       for (const tile of job.tiles.filter((t) => t.status === "complete")) {
-        const response = tile.response;
+        const response = tile.response!;
         for (const [i, p] of (response.predictions || []).entries()) {
           if (
             Number(p.confidence) < 0.2 ||
@@ -330,8 +347,8 @@ export class ScanJobs {
             continue;
           const input =
             response.image?.width && response.image?.height
-              ? response.image
-              : tile.input.output;
+              ? { width: response.image.width, height: response.image.height }
+              : tile.input!.output;
           const polygon = mapPoints(p.points, tile, input);
           if (
             !polygon.flat().every(Number.isFinite) ||

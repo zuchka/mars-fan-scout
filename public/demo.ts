@@ -9,10 +9,14 @@ import { ImageViewer } from "./image-viewer.js";
 import { saveSession, loadSession } from "./session-store.js";
 import { maskRGBA, decodeRLE } from "./masks.js";
 import { isReviewed, nextUnreviewed, normalizeReviews, recordsForScan, reviewProgress, setReview } from "./review-flow.js";
-const $ = (id) => document.getElementById(id),
-  NS = "http://www.w3.org/2000/svg";
-const rasterCache = new Map();
-const state = {
+import { element as $ } from "./demo-dom.js";
+import type { Point, Region } from "./types.js";
+import type { SourceMeta, ScanRequest } from "../scout/types.js";
+import type { DemoState, FringeField, JobView, PendingJob, PersistedDemo, RefinedMask, ScanView } from "./demo-types.js";
+import type { FringeEdit } from "./fringe.js";
+const NS = "http://www.w3.org/2000/svg";
+const rasterCache = new Map<string, string>();
+const state: DemoState = {
   code: "",
   access: false,
   source: null,
@@ -31,27 +35,47 @@ const state = {
   model: null,
   restored: false,
   hidden: false,
+  uploading: false,
+  estimate: 0,
+  worker: null,
+  pendingRefine: null,
+  detail: null,
+  features: {},
 };
-const headers = () => (state.code ? { "x-demo-access-code": state.code } : {});
-async function api(path, options = {}) {
+const headers = (initial?: HeadersInit): Headers => {
+  const result = new Headers(initial);
+  if (state.code) result.set("x-demo-access-code", state.code);
+  return result;
+};
+type ApiError = Error & { terminal?: boolean };
+type StatusResponse = { access_granted: boolean; daily_remaining: number | null; model_id: string | null;
+  features: DemoState["features"]; full_observation_available: boolean; scout_ready: boolean };
+type PackedFringe = Omit<FringeField, "alpha" | "baseline"> & {
+  alpha_rle: Array<[number, number]>; baseline?: PackedFringe | null;
+};
+type ImportedReview = { format: string; source: SourceMeta; run: ScanView; latest_job?: JobView;
+  refinements?: Record<string, RefinedMask>; reviews?: DemoState["reviews"];
+  edits?: DemoState["edits"]; fringes?: Record<string, PackedFringe> };
+const errorMessage = (error: unknown): string => error instanceof Error ? error.message : String(error);
+async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
   const response = await fetch(path, {
     ...options,
-    headers: { ...headers(), ...options.headers },
+    headers: headers(options.headers),
   });
-  const data = await response.json();
+  const data = await response.json() as T & { error?: string };
   if (!response.ok) {
     const error = new Error(
       data.error || `Request failed (${response.status})`,
-    );
+    ) as ApiError;
     error.terminal = response.status >= 400 && response.status < 500;
     throw error;
   }
   return data;
 }
-async function blob(path, options = {}) {
+async function blob(path: string, options: RequestInit = {}): Promise<Blob> {
   const response = await fetch(path, {
     ...options,
-    headers: { ...headers(), ...options.headers },
+    headers: headers(options.headers),
   });
   if (!response.ok) {
     let data;
@@ -62,28 +86,28 @@ async function blob(path, options = {}) {
   }
   return response.blob();
 }
-const post = (path, data) =>
-  api(path, {
+const post = (path: string, data: unknown): Promise<JobView> =>
+  api<JobView>(path, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(data),
   });
-const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const wait = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 const selected = () =>
   state.run?.candidates.find((c) => c.id === state.selected);
-function message(text) {
+function message(text: string): void {
   $("run-error").textContent = text;
   $("run-error").hidden = !text;
 }
-function status(text, busy = false) {
+function status(text: string, busy = false): void {
   $("top-status").textContent = text;
   $("run-light").textContent = text;
   $("status-dot").className = busy ? "busy" : "ready";
   $("run-light").className = "run-light " + (busy ? "active" : "done");
 }
-function sourceRegion(region, max = 1024) {
-  const query = new URLSearchParams({ ...region, max });
-  return blob(`/api/scout/sources/${state.source.id}/region?${query}`);
+function sourceRegion(region: Region, max = 1024): Promise<Blob> {
+  const query = new URLSearchParams(Object.fromEntries(Object.entries({ ...region, max }).map(([key, value]) => [key, String(value)])));
+  return blob(`/api/scout/sources/${state.source!.id}/region?${query}`);
 }
 const viewer = new ImageViewer(
   $("image-frame"),
@@ -120,7 +144,7 @@ async function persist() {
       "Browser storage is unavailable. Export your review before leaving.";
   }
 }
-async function setSource(source, { remember = true } = {}) {
+async function setSource(source: SourceMeta, { remember = true } = {}): Promise<void> {
   if (state.source && remember) await persist();
   const generation = ++state.generation;
   state.detailToken++;
@@ -186,7 +210,7 @@ async function setSource(source, { remember = true } = {}) {
 }
 function scanRegion() {
   return $("scan-area").value === "full"
-    ? { x: 0, y: 0, width: state.source.width, height: state.source.height }
+    ? { x: 0, y: 0, width: state.source!.width, height: state.source!.height }
     : viewer.visible();
 }
 function updateEstimate() {
@@ -222,7 +246,7 @@ function updateControls() {
     "scan-area",
     "scan-scale",
   ])
-    $(id).disabled =
+    ($(id) as HTMLButtonElement | HTMLInputElement | HTMLSelectElement).disabled =
       state.busy ||
       state.refining ||
       state.uploading ||
@@ -239,38 +263,38 @@ function updateControls() {
   $("context-size").disabled = state.refining;
   for (const input of [$("image-input"), $("review-input")]) {
     input
-      .closest("label")
+      .closest("label")!
       .setAttribute("aria-disabled", String(input.disabled));
-    input.closest("label").tabIndex = input.disabled ? -1 : 0;
+    input.closest("label")!.tabIndex = input.disabled ? -1 : 0;
   }
 }
-function svgPolygon(points, className) {
+function svgPolygon(points: Point[], className: string): SVGPolygonElement {
   const node = document.createElementNS(NS, "polygon");
   node.setAttribute("points", points.map((p) => p.join(",")).join(" "));
   node.setAttribute("class", className);
   node.style.fillOpacity = String(Number($("fill-opacity").value) / 100);
   return node;
 }
-function svgRaster(refined) {
+function svgRaster(refined: RefinedMask): SVGImageElement {
   const opacity = Number($("fill-opacity").value) / 100,
     key = `${refined.job_id}:${opacity}`;
   if (!rasterCache.has(key)) {
-    const { rgba, width, height } = maskRGBA(refined.rle, opacity),
+    const { rgba, width, height } = maskRGBA(refined.rle!, opacity),
       canvas = document.createElement("canvas");
     canvas.width = width;
     canvas.height = height;
     canvas
-      .getContext("2d")
+      .getContext("2d")!
       .putImageData(new ImageData(rgba, width, height), 0, 0);
     rasterCache.set(key, canvas.toDataURL("image/png"));
     if (rasterCache.size > 24)
-      rasterCache.delete(rasterCache.keys().next().value);
+      rasterCache.delete(rasterCache.keys().next().value!);
   }
   const image = document.createElementNS(NS, "image"),
     r = refined.input.region;
-  for (const prop of ["x", "y", "width", "height"])
-    image.setAttribute(prop, r[prop]);
-  image.setAttribute("href", rasterCache.get(key));
+  for (const prop of ["x", "y", "width", "height"] as const)
+    image.setAttribute(prop, String(r[prop]));
+  image.setAttribute("href", rasterCache.get(key)!);
   image.setAttribute("preserveAspectRatio", "none");
   return image;
 }
@@ -293,8 +317,8 @@ function drawMasks() {
     }
     const b = bounds(c.polygon),
       text = document.createElementNS(NS, "text");
-    text.setAttribute("x", b.x);
-    text.setAttribute("y", b.y - 8);
+    text.setAttribute("x", String(b.x));
+    text.setAttribute("y", String(b.y - 8));
     text.setAttribute("class", "candidate-number");
     text.textContent = String(i + 1).padStart(2, "0");
     overlay.append(text);
@@ -327,7 +351,7 @@ function renderResults() {
     button.setAttribute("aria-pressed", String(c.id === state.selected));
     const number = document.createElement("span");
     number.className = "index";
-    number.textContent = i + 1;
+    number.textContent = String(i + 1);
     const name = document.createElement("span");
     name.className = "name";
     name.textContent = `Shape ${String(i + 1).padStart(2, "0")}`;
@@ -363,7 +387,7 @@ async function showDetail({ focus = false } = {}) {
   state.detail = null;
   $("candidate-detail").hidden = false;
   $("detail-name").textContent =
-    `SHAPE ${String(state.run.candidates.indexOf(candidate) + 1).padStart(2, "0")}`;
+    `SHAPE ${String(state.run!.candidates.indexOf(candidate) + 1).padStart(2, "0")}`;
   $("detail-verdict").textContent =
     isReviewed(state.reviews, candidate.id)
       ? state.reviews[candidate.id].decision
@@ -379,9 +403,9 @@ async function showDetail({ focus = false } = {}) {
     );
   $("clear-review").disabled = !isReviewed(state.reviews, candidate.id);
   $("next-unreviewed").disabled = !nextUnreviewed(
-    state.run.candidates, state.reviews, candidate.id,
+    state.run!.candidates, state.reviews, candidate.id,
   );
-  $("next-unreviewed").textContent = reviewProgress(state.run.candidates, state.reviews) === state.run.candidates.length
+  $("next-unreviewed").textContent = reviewProgress(state.run!.candidates, state.reviews) === state.run!.candidates.length
     ? "All proposals reviewed"
     : "Next unreviewed →";
   if (focus) {
@@ -393,7 +417,7 @@ async function showDetail({ focus = false } = {}) {
   updateControls();
   const region = candidateRegion(
     candidate,
-    state.source,
+    state.source!,
     Number($("context-size").value),
   );
   try {
@@ -405,7 +429,7 @@ async function showDetail({ focus = false } = {}) {
     const off = document.createElement("canvas");
     off.width = bitmap.width;
     off.height = bitmap.height;
-    off.getContext("2d").drawImage(bitmap, 0, 0);
+    off.getContext("2d")!.drawImage(bitmap, 0, 0);
     bitmap.close();
     state.detail = { candidateId: candidate.id, region, canvas: off };
     $("evidence-caption").textContent =
@@ -417,7 +441,7 @@ async function showDetail({ focus = false } = {}) {
         "Experimental connected dark signal; inspect the extent.";
   } catch (error) {
     if (token === state.detailToken)
-      $("evidence-caption").textContent = error.message;
+      $("evidence-caption").textContent = errorMessage(error);
   }
 }
 function drawEvidence() {
@@ -426,7 +450,7 @@ function drawEvidence() {
   const canvas = $("source-evidence");
   canvas.width = detail.canvas.width;
   canvas.height = detail.canvas.height;
-  const c = canvas.getContext("2d");
+  const c = canvas.getContext("2d")!;
   c.drawImage(detail.canvas, 0, 0);
   const f = state.fringes[detail.candidateId];
   if (
@@ -438,7 +462,7 @@ function drawEvidence() {
     const layer = document.createElement("canvas");
     layer.width = f.width;
     layer.height = f.height;
-    const ctx = layer.getContext("2d"),
+    const ctx = layer.getContext("2d")!,
       pixels = ctx.createImageData(f.width, f.height);
     for (let i = 0; i < f.alpha.length; i++) {
       pixels.data[i * 4] = 244;
@@ -487,19 +511,19 @@ function renderRun() {
   void showDetail();
   updateControls();
 }
-function adoptScanResult(result) {
+function adoptScanResult(result: ScanView): void {
   if (state.run?.id !== result.id) {
     const currentIds = new Set(result.candidates.map((candidate) => candidate.id));
     Object.assign(state, recordsForScan(result, state));
-    if (!currentIds.has(state.selected)) state.selected = null;
+    if (!state.selected || !currentIds.has(state.selected)) state.selected = null;
   }
   state.run = result;
   state.restored = false;
   renderRun();
 }
-async function pollJob(jobId, onUpdate, generation) {
+async function pollJob(jobId: string, onUpdate: (job: JobView) => Promise<void> | void, generation: number): Promise<JobView | null> {
   for (;;) {
-    const job = await api(`/api/scout/jobs/${jobId}`);
+    const job = await api<JobView>(`/api/scout/jobs/${jobId}`);
     if (generation !== state.generation) return null;
     state.remaining = job.daily_remaining;
     await onUpdate(job);
@@ -529,9 +553,9 @@ async function startScan(retry = false) {
   updateControls();
   try {
     const reconnect = prior && ["queued", "running"].includes(prior.status);
-    const config = {
+    const config: ScanRequest = {
       id: crypto.randomUUID(),
-      source_id: state.source.id,
+      source_id: state.source!.id,
       kind: "scan",
       region: prior?.region || scanRegion(),
       scale: prior?.scale || Number($("scan-scale").value),
@@ -539,22 +563,23 @@ async function startScan(retry = false) {
     };
     // Save the request ID before dispatch. Reconnection can safely resubmit this
     // exact ID if the POST response was lost after the server accepted the job.
-    state.job = reconnect
-      ? prior
-      : {
+    const pending: PendingJob = {
           ...config,
+          scale: config.scale!,
           status: "queued",
           submission: config,
           completed: 0,
           total: state.estimate,
           tiles: [],
         };
+    state.job = reconnect ? prior! : pending;
     $("cancel-scan").disabled = true;
     await persist();
+    const submission = prior && "submission" in prior ? prior.submission : undefined;
     const job = reconnect
-      ? prior.submission
-        ? await post("/api/scout/jobs", prior.submission)
-        : await api(`/api/scout/jobs/${prior.id}`)
+      ? submission
+        ? await post("/api/scout/jobs", submission)
+        : await api<JobView>(`/api/scout/jobs/${prior!.id}`)
       : await post("/api/scout/jobs", config);
     state.job = job;
     $("cancel-scan").disabled = false;
@@ -576,6 +601,7 @@ async function startScan(retry = false) {
     );
     if (generation !== state.generation) return;
     const result = state.job;
+    if (!result) throw new Error("Scan state was lost");
     if (!result.completed && result.status !== "complete") {
       state.run = previous;
       message(
@@ -596,9 +622,9 @@ async function startScan(retry = false) {
     );
   } catch (error) {
     if (generation === state.generation) {
-      if (error.terminal && state.job?.submission) state.job = null;
+      if ((error as ApiError).terminal && state.job && "submission" in state.job && state.job.submission) state.job = null;
       message(
-        `${error.message}${state.job && ["queued", "running"].includes(state.job.status) ? " The server may still be scanning. Reconnect to recover its result." : ""}`,
+        `${errorMessage(error)}${state.job && ["queued", "running"].includes(state.job.status) ? " The server may still be scanning. Reconnect to recover its result." : ""}`,
       );
       $("retry-scan").textContent = "Reconnect scan";
       $("retry-scan").hidden = !state.job;
@@ -619,7 +645,7 @@ async function refineSelected() {
   const generation = state.generation,
     region = candidateRegion(
       candidate,
-      state.source,
+      state.source!,
       Number($("context-size").value),
     );
   const b = bounds(candidate.polygon);
@@ -629,9 +655,9 @@ async function refineSelected() {
   $("refine-status").textContent =
     "Tracing the selected region from its native crop…";
   try {
-    const config = {
+    const config: ScanRequest = {
       id: crypto.randomUUID(),
-      source_id: state.source.id,
+      source_id: state.source!.id,
       kind: "refine",
       region,
       scale: 1,
@@ -648,21 +674,22 @@ async function refineSelected() {
       submission: config,
     };
     await persist();
-    if (state.pendingRefine.submission) {
-      await post("/api/scout/jobs", state.pendingRefine.submission);
-      delete state.pendingRefine.submission;
+    const pending = state.pendingRefine!;
+    if (pending.submission) {
+      await post("/api/scout/jobs", pending.submission);
+      delete pending.submission;
       await persist();
     }
     await finishRefine(
-      state.pendingRefine.job_id,
-      state.pendingRefine.candidate_id,
+      pending.job_id,
+      pending.candidate_id,
       generation,
     );
     state.pendingRefine = null;
   } catch (error) {
-    if (error.terminal) state.pendingRefine = null;
+    if ((error as ApiError).terminal) state.pendingRefine = null;
     if (generation === state.generation)
-      $("refine-status").textContent = error.message;
+      $("refine-status").textContent = errorMessage(error);
   } finally {
     if (generation === state.generation) {
       state.refining = false;
@@ -671,18 +698,19 @@ async function refineSelected() {
     }
   }
 }
-async function finishRefine(jobId, candidateId, generation) {
+async function finishRefine(jobId: string, candidateId: string, generation: number): Promise<void> {
   const job = await pollJob(jobId, () => {}, generation);
   if (!job) return;
   if (job.status !== "complete") {
-    const error = new Error(job.tiles[0].error || `Trace ${job.status}`);
+    const error = new Error(job.tiles[0].error || `Trace ${job.status}`) as ApiError;
     error.terminal = true;
     throw error;
   }
   const tile = job.tiles[0],
-    mask = tile.response.masks[0];
+    mask = (tile.response as { masks: Array<{ polygons?: Point[][]; polygon?: Point[];
+      rle?: RefinedMask["rle"]; format: string; holes_preserved: boolean; area?: number }> }).masks[0];
   const polygons = (mask.polygons || (mask.polygon ? [mask.polygon] : [])).map(
-    (p) => mapPoints(p, tile, tile.input.output),
+    (p) => mapPoints(p, tile, tile.input!.output),
   );
   state.refined[candidateId] = {
     polygons,
@@ -691,8 +719,8 @@ async function finishRefine(jobId, candidateId, generation) {
     holes_preserved: mask.holes_preserved,
     job_id: job.id,
     created_at: job.created_at,
-    input: tile.input,
-    raw_response: tile.response,
+    input: tile.input!,
+    raw_response: tile.response!,
   };
   $("refine-status").textContent =
     mask.rle && mask.area
@@ -719,7 +747,7 @@ function estimate() {
   );
   grid.width = Math.round(detail.canvas.width * scale);
   grid.height = Math.round(detail.canvas.height * scale);
-  const c = grid.getContext("2d");
+  const c = grid.getContext("2d")!;
   c.drawImage(detail.canvas, 0, 0, grid.width, grid.height);
   const data = c.getImageData(0, 0, grid.width, grid.height).data,
     gray = new Uint8Array(grid.width * grid.height);
@@ -729,7 +757,7 @@ function estimate() {
         0.7152 * data[i * 4 + 1] +
         0.0722 * data[i * 4 + 2],
     );
-  const transform = (p) => [
+  const transform = (p: Point): Point => [
     ((p[0] - detail.region.x) * grid.width) / detail.region.width,
     ((p[1] - detail.region.y) * grid.height) / detail.region.height,
   ];
@@ -741,23 +769,24 @@ function estimate() {
   worker.onmessage = async (event) => {
     worker.terminate();
     if (token !== state.detailToken) return;
-    if (event.data.error) {
-      $("fringe-status").textContent = event.data.error;
+    const result = event.data as FringeField | { error: string };
+    if ("error" in result) {
+      $("fringe-status").textContent = result.error;
       return;
     }
     state.fringes[candidate.id] = {
-      ...event.data,
+      ...result,
       baseline:
         state.fringes[candidate.id]?.baseline ||
         ((state.edits[candidate.id] || []).length
           ? null
-          : { ...event.data, region: detail.region }),
+          : { ...result, region: detail.region }),
       region: detail.region,
       created_at: new Date().toISOString(),
       edits: structuredClone(state.edits[candidate.id] || []),
     };
     $("fringe-status").textContent =
-      `${grid.width} × ${grid.height} analysis grid · ${event.data.warnings.join(" · ") || "Inspect this experimental extent; the detector supplied its initial seeds."}`;
+      `${grid.width} × ${grid.height} analysis grid · ${result.warnings.join(" · ") || "Inspect this experimental extent; the detector supplied its initial seeds."}`;
     drawEvidence();
     await persist();
   };
@@ -777,8 +806,8 @@ function estimate() {
     [gray.buffer],
   );
 }
-function rle(values) {
-  const runs = [];
+function rle(values: Uint8Array): Array<[number, number]> {
+  const runs: Array<[number, number]> = [];
   let previous = -1;
   for (const value of values) {
     if (value === previous) runs[runs.length - 1][1]++;
@@ -789,7 +818,7 @@ function rle(values) {
   }
   return runs;
 }
-function download(bytes, name, type) {
+function download(bytes: BlobPart, name: string, type: string): void {
   const url = URL.createObjectURL(new Blob([bytes], { type })),
     a = document.createElement("a");
   a.href = url;
@@ -797,10 +826,10 @@ function download(bytes, name, type) {
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 30000);
 }
-async function restore(sourceId) {
+async function restore(sourceId?: string): Promise<boolean> {
   let saved;
   try {
-    saved = await loadSession(sourceId);
+    saved = await loadSession<PersistedDemo>(sourceId);
   } catch {
     return false;
   }
@@ -812,7 +841,7 @@ async function restore(sourceId) {
   )
     return false;
   try {
-    const source = await api(`/api/scout/sources/${saved.source.id}`);
+    const source = await api<SourceMeta>(`/api/scout/sources/${saved.source.id}`);
     if (source.original_sha256 !== saved.source.original_sha256) {
       message(
         "The saved source changed. Choose the source again before scanning.",
@@ -851,7 +880,7 @@ async function restore(sourceId) {
       updateControls();
       $("cancel-scan").hidden = false;
       $("scan-progress").hidden = false;
-      if (state.job.submission)
+      if ("submission" in state.job && state.job.submission)
         state.job = await post("/api/scout/jobs", state.job.submission);
       await pollJob(
         state.job.id,
@@ -870,7 +899,7 @@ async function restore(sourceId) {
       state.busy = false;
       $("cancel-scan").hidden = true;
       updateControls();
-      status(state.job.status);
+      status(state.job!.status);
     }
     if (state.pendingRefine && state.access) {
       state.refining = true;
@@ -901,19 +930,19 @@ async function restore(sourceId) {
     $("retry-scan").hidden = !state.job;
     $("retry-scan").textContent = "Reconnect scan";
     message(
-      `Saved session needs attention: ${error.message}. No new inference was started.`,
+      `Saved session needs attention: ${errorMessage(error)}. No new inference was started.`,
     );
     status("Saved session needs attention");
     return true;
   }
 }
 async function checkAccess() {
-  const data = await api("/api/status");
+  const data = await api<StatusResponse>("/api/status");
   state.access = data.access_granted;
   state.remaining = data.daily_remaining;
   state.model = data.model_id;
   state.features = data.features || {};
-  document.querySelector(".fringe-controls").hidden =
+  document.querySelector<HTMLElement>(".fringe-controls")!.hidden =
     state.features.experimental_fringe === false;
   $("access-panel").hidden = state.access;
   $("orbit-button").hidden = !data.full_observation_available;
@@ -922,10 +951,11 @@ async function checkAccess() {
 }
 async function init() {
   for (const label of document.querySelectorAll('.upload-link[role="button"]'))
-    label.addEventListener("keydown", (event) => {
+    label.addEventListener("keydown", (rawEvent) => {
+      const event = rawEvent as KeyboardEvent;
       if (event.key === "Enter" || event.key === " ") {
         event.preventDefault();
-        label.querySelector("input").click();
+        label.querySelector("input")!.click();
       }
     });
 
@@ -944,7 +974,7 @@ async function init() {
       : "Hide overlays";
     drawMasks();
   };
-  let imagePress = null;
+  let imagePress: { x: number; y: number } | null = null;
   $("image-frame").addEventListener("pointerdown", (event) => {
     if (event.button === 0) imagePress = { x: event.clientX, y: event.clientY };
   });
@@ -955,7 +985,7 @@ async function init() {
     if (moved > 5 || state.hidden || !state.run || !$("rf-layer").checked ||
       $("candidate-overlay").style.visibility === "hidden") return;
     const rect = $("image-frame").getBoundingClientRect();
-    const point = [viewer.offset.x + (event.clientX - rect.left) / viewer.zoom,
+    const point: Point = [viewer.offset.x + (event.clientX - rect.left) / viewer.zoom,
       viewer.offset.y + (event.clientY - rect.top) / viewer.zoom];
     const candidate = state.run.candidates.find((item, index) =>
       (index < 3 || item.id === state.selected) && inside(point, item.polygon));
@@ -990,11 +1020,11 @@ async function init() {
     try {
       state.job = await post(`/api/scout/jobs/${state.job.id}/cancel`, {});
     } catch (error) {
-      message(error.message);
+      message(errorMessage(error));
     }
   };
   $("refine-button").onclick = refineSelected;
-  $("context-size").onchange = showDetail;
+  $("context-size").onchange = () => { void showDetail(); };
   $("inspect-native").onclick = () => {
     const c = selected();
     if (c) {
@@ -1005,17 +1035,17 @@ async function init() {
     }
   };
   $("review-buttons").onclick = (event) => {
-    const decision = event.target.dataset.decision,
+    const decision = event.target instanceof HTMLElement ? event.target.dataset.decision : undefined,
       c = selected();
     if (!decision || !c) return;
-    setReview(state.reviews, c.id, decision, state.source.original_sha256, new Date().toISOString());
+    setReview(state.reviews, c.id, decision, state.source!.original_sha256, new Date().toISOString());
     renderResults();
     $("detail-verdict").textContent = decision;
     for (const b of $("review-buttons").querySelectorAll("button"))
       b.setAttribute("aria-pressed", String(b.dataset.decision === decision));
     $("clear-review").disabled = false;
-    $("next-unreviewed").disabled = !nextUnreviewed(state.run.candidates, state.reviews, c.id);
-    $("next-unreviewed").textContent = reviewProgress(state.run.candidates, state.reviews) === state.run.candidates.length
+    $("next-unreviewed").disabled = !nextUnreviewed(state.run!.candidates, state.reviews, c.id);
+    $("next-unreviewed").textContent = reviewProgress(state.run!.candidates, state.reviews) === state.run!.candidates.length
       ? "All proposals reviewed" : "Next unreviewed →";
     void persist();
   };
@@ -1028,7 +1058,7 @@ async function init() {
     for (const b of $("review-buttons").querySelectorAll("button"))
       b.setAttribute("aria-pressed", "false");
     $("clear-review").disabled = true;
-    $("next-unreviewed").disabled = !nextUnreviewed(state.run.candidates, state.reviews, c.id);
+    $("next-unreviewed").disabled = !nextUnreviewed(state.run!.candidates, state.reviews, c.id);
     $("next-unreviewed").textContent = "Next unreviewed →";
     void persist();
   };
@@ -1042,14 +1072,15 @@ async function init() {
     void persist();
   };
   $("fringe-button").onclick = estimate;
-  let sensitivityTimer;
+  let sensitivityTimer: ReturnType<typeof setTimeout> | undefined;
   $("fringe-sensitivity").oninput = () => {
     clearTimeout(sensitivityTimer);
     sensitivityTimer = setTimeout(estimate, 180);
   };
   $("fringe-clear").onclick = () => {
-    if (selected() && state.fringes[selected().id])
-      state.fringes[selected().id].hidden = true;
+    const candidate = selected();
+    if (candidate && state.fringes[candidate.id])
+      state.fringes[candidate.id].hidden = true;
     drawEvidence();
     $("fringe-status").textContent = "Fringe hidden.";
     void persist();
@@ -1058,7 +1089,8 @@ async function init() {
     const detail = state.detail,
       mode = $("edit-mode").value;
     if (!detail || mode === "inspect") return;
-    const rect = event.currentTarget.getBoundingClientRect();
+    if (mode !== "include" && mode !== "exclude") return;
+    const rect = $("source-evidence").getBoundingClientRect();
     const point = {
       x:
         detail.region.x +
@@ -1066,21 +1098,23 @@ async function init() {
       y:
         detail.region.y +
         ((event.clientY - rect.top) / rect.height) * detail.region.height,
-      label: mode,
+      label: mode as FringeEdit["label"],
     };
     (state.edits[detail.candidateId] ||= []).push(point);
     drawEvidence();
     estimate();
   };
   $("undo-edit").onclick = () => {
-    if (selected()) {
-      state.edits[selected().id]?.pop();
+    const candidate = selected();
+    if (candidate) {
+      state.edits[candidate.id]?.pop();
       estimate();
     }
   };
   $("reset-edits").onclick = () => {
-    if (selected()) {
-      state.edits[selected().id] = [];
+    const candidate = selected();
+    if (candidate) {
+      state.edits[candidate.id] = [];
       estimate();
     }
   };
@@ -1088,25 +1122,25 @@ async function init() {
     try {
       await persist();
       if (!(await restore("sample")))
-        await setSource(await api("/api/scout/sources/sample"));
+        await setSource(await api<SourceMeta>("/api/scout/sources/sample"));
       await persist();
     } catch (error) {
-      message(error.message);
+      message(errorMessage(error));
     }
   };
   $("orbit-button").onclick = async () => {
     try {
-      await setSource(await api("/api/scout/sources/orbit"));
+      await setSource(await api<SourceMeta>("/api/scout/sources/orbit"));
       $("scan-area").value = "view";
       updateEstimate();
       await persist();
     } catch (error) {
-      message(error.message);
+      message(errorMessage(error));
     }
   };
   $("image-input").onchange = async (event) => {
-    const file = event.target.files?.[0];
-    event.target.value = "";
+    const file = $("image-input").files?.[0];
+    $("image-input").value = "";
     if (!file) return;
     if (file.size > 32 * 1024 * 1024) {
       message("Choose an image under 32 MiB.");
@@ -1117,7 +1151,7 @@ async function init() {
       updateControls();
       status("Preserving original", true);
       await setSource(
-        await api("/api/scout/sources", {
+        await api<SourceMeta>("/api/scout/sources", {
           method: "POST",
           headers: {
             "content-type": file.type,
@@ -1128,7 +1162,7 @@ async function init() {
       );
       await persist();
     } catch (error) {
-      message(error.message);
+      message(errorMessage(error));
       status("Upload interrupted");
     } finally {
       state.uploading = false;
@@ -1137,26 +1171,27 @@ async function init() {
   };
   $("download-source").onclick = async () => {
     try {
-      const original = await blob(state.source.original);
+      if (!state.source) return;
+      const original = await blob(state.source.original || `/api/scout/sources/${state.source.id}/original`);
       download(
         original,
         `${state.source.id}-original.${state.source.original_format}`,
         "application/octet-stream",
       );
     } catch (error) {
-      message(error.message);
+      message(errorMessage(error));
     }
   };
   $("review-input").onchange = async (event) => {
-    const file = event.target.files?.[0];
-    event.target.value = "";
+    const file = $("review-input").files?.[0];
+    $("review-input").value = "";
     if (!file) return;
     try {
       if (state.busy || state.refining)
         throw new Error("Finish or cancel the active request before importing");
       if (file.size > 32 * 1024 ** 2)
         throw new Error("Review JSON exceeds 32 MiB");
-      const record = JSON.parse(await file.text());
+      const record = JSON.parse(await file.text()) as ImportedReview;
       if (
         record.format !== "mars-native-review-v1" ||
         !record.source ||
@@ -1164,7 +1199,7 @@ async function init() {
         !Array.isArray(record.run.candidates)
       )
         throw new Error("Unsupported review file");
-      const source = await api(`/api/scout/sources/${record.source.id}`);
+      const source = await api<SourceMeta>(`/api/scout/sources/${record.source.id}`);
       if (
         source.original_sha256 !== record.source.original_sha256 ||
         record.run.source_sha256 !== source.original_sha256 ||
@@ -1195,7 +1230,7 @@ async function init() {
           throw new Error("Invalid candidate geometry");
       for (const refinement of Object.values(record.refinements || {}))
         if (refinement.rle) decodeRLE(refinement.rle, 2048 ** 2);
-      const unpack = (f) => {
+      const unpack = (f: PackedFringe): FringeField => {
         if (
           !Number.isInteger(f.width) ||
           !Number.isInteger(f.height) ||
@@ -1227,7 +1262,7 @@ async function init() {
           baseline: f.baseline ? unpack(f.baseline) : null,
         };
       };
-      const fringes = Object.fromEntries(
+      const fringes: Record<string, FringeField> = Object.fromEntries(
         Object.entries(record.fringes || {}).map(([id, f]) => [id, unpack(f)]),
       );
       await setSource(source);
@@ -1248,7 +1283,7 @@ async function init() {
       status("Imported saved result");
       await persist();
     } catch (error) {
-      message(error.message);
+      message(errorMessage(error));
     }
   };
   $("export-review").onclick = () => {
@@ -1307,11 +1342,11 @@ async function init() {
         $("access-error").textContent = "That code did not unlock scanning.";
       }
     } catch (error) {
-      message(error.message);
+      message(errorMessage(error));
     }
   };
   try {
-    await setSource(await api("/api/scout/sources/sample"));
+    await setSource(await api<SourceMeta>("/api/scout/sources/sample"));
     const ready = await checkAccess();
     const restored = await restore();
     if (ready && !restored) {
@@ -1320,7 +1355,7 @@ async function init() {
       await startScan();
     }
   } catch (error) {
-    message(error.message);
+    message(errorMessage(error));
     status("Needs attention");
   }
 }

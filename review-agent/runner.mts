@@ -2,18 +2,41 @@ import { randomUUID } from "node:crypto";
 import { makeEvidence } from "./evidence.mjs";
 import { MODEL, PROMPT_VERSION } from "./provider.mjs";
 import { POLICY_VERSION, reviewDecision } from "./jev-policy.mjs";
+import type { ReviewBudget } from "./budget.mjs";
+import type { Evidence } from "./evidence.mjs";
+import type { JevPrediction } from "./provider.mjs";
+import type { ReviewStore } from "./store.mjs";
+import type { ReviewCandidate, ReviewResult, ReviewRun, ReviewSession, ReviewTrace } from "./types.js";
+
+type ReviewAction = ReturnType<typeof reviewDecision>;
+type AgentResponse = JevPrediction & {
+  cost_usd?: number | null; response_id?: string | null; usage?: unknown;
+  cost_basis?: string | null; elapsed_ms?: number;
+};
+type AgentProvider = ((request: { candidate: ReviewCandidate; evidence: Evidence; wider: boolean;
+  firstAction: ReviewAction | null; timeout_ms: number }) => Promise<AgentResponse>) & {
+  metadata?: { model?: string; [key: string]: unknown };
+};
 
 const now = () => new Date().toISOString();
 
 export class ReviewRunner {
-  constructor({ store, budget, provider, policy = {} }) {
+  store: ReviewStore;
+  budget: ReviewBudget | null;
+  provider: AgentProvider | null;
+  policy: { minProbability: number; minMargin: number };
+  queue: Array<{ session: ReviewSession; run: ReviewRun }>;
+  working: boolean;
+
+  constructor({ store, budget, provider, policy = {} }: { store: ReviewStore; budget: ReviewBudget | null;
+    provider: AgentProvider | null; policy?: { minProbability?: number; minMargin?: number } }) {
     this.store = store; this.budget = budget; this.provider = provider;
     this.policy = { minProbability: Number(policy.minProbability ?? 0.8), minMargin: Number(policy.minMargin ?? 0.25) };
     if (![this.policy.minProbability, this.policy.minMargin].every(value => Number.isFinite(value) && value >= 0 && value <= 1)) throw new Error("Invalid Jev review thresholds");
     this.queue = []; this.working = false;
   }
-  get enabled() { return !!this.provider && this.budget.enabled; }
-  async enqueue(session, ids, key) {
+  get enabled(): boolean { return !!this.provider && !!this.budget?.enabled; }
+  async enqueue(session: ReviewSession, ids: string[], key: string): Promise<ReviewRun> {
     if (!this.enabled) throw new Error("Review agent is not configured");
     if (!Array.isArray(ids) || !ids.length || ids.length > 50 || ids.some(id => !session.candidates.some(item => item.id === id)) || new Set(ids).size !== ids.length) throw new Error("Invalid candidate selection");
     if (typeof key !== "string" || !/^[a-zA-Z0-9_-]{8,80}$/.test(key)) throw new Error("Idempotency key required");
@@ -22,14 +45,14 @@ export class ReviewRunner {
     if (Object.values(session.runs).some(run => run.candidates.some(id => ids.includes(id)))) throw new Error("Candidate already has an agent run");
     const id = randomUUID();
     const run = { id, status: "queued", created_at: now(), started_at: null, finished_at: null,
-      candidates: ids, results: {}, model: this.provider.metadata?.model || MODEL,
-      provider: this.provider.metadata || { provider: "Jev-Omni" }, prompt_version: PROMPT_VERSION,
+      candidates: ids, results: {}, model: this.provider?.metadata?.model || MODEL,
+      provider: this.provider?.metadata || { provider: "Jev-Omni" }, prompt_version: PROMPT_VERSION,
       policy_version: POLICY_VERSION, policy: { ...this.policy } };
     session.runs[id] = run;
     session.idempotency[key] = id;
     await this.store.event(session, "run_queued", { run_id: id, candidates: ids });
     this.queue.push({ session, run });
-    queueMicrotask(() => { this.drain().catch(error => console.error("Review runner stopped:", error.message)); });
+    queueMicrotask(() => { this.drain().catch(error => console.error("Review runner stopped:", error instanceof Error ? error.message : String(error))); });
     return run;
   }
   async drain() {
@@ -37,22 +60,22 @@ export class ReviewRunner {
     this.working = true;
     try {
       while (this.queue.length) {
-        const { session, run } = this.queue.shift();
+        const { session, run } = this.queue.shift()!;
         const runStarted = performance.now();
         run.status = "running"; run.started_at = now();
         await this.store.event(session, "run_started", { run_id: run.id });
         const imageReadStarted = performance.now();
         const image = session.demo ? await this.store.source(session) : null;
         run.image_read_ms = session.demo ? Math.round(performance.now() - imageReadStarted) : null;
-        const review = async id => {
+        const review = async (id: string) => {
           if (run.provider_unavailable) {
             run.results[id] = this.fallback([], performance.now(), run.provider_unavailable, "unavailable");
             await this.store.event(session, "candidate_terminal", { run_id: run.id, candidate_id: id, result: run.results[id] });
             return;
           }
-          const candidate = session.candidates.find(item => item.id === id);
+          const candidate = session.candidates.find(item => item.id === id)!;
           try { run.results[id] = await this.reviewCandidate(session, run, candidate, image); }
-          catch (error) { run.results[id] = { action: "send_to_human", verdict: "unsure", explanation: "Jev error: " + String(error.message).slice(0, 180), explanation_source: "application_rule", status: "error", trace: [], human_review_required: true }; }
+          catch (error) { run.results[id] = { action: "send_to_human", verdict: "unsure", explanation: "Jev error: " + String(error instanceof Error ? error.message : error).slice(0, 180), explanation_source: "application_rule", status: "error", trace: [], human_review_required: true }; }
           await this.store.event(session, "candidate_terminal", { run_id: run.id, candidate_id: id, result: run.results[id] });
         };
         if (session.demo) await Promise.all(run.candidates.map(review));
@@ -62,9 +85,9 @@ export class ReviewRunner {
       }
     } finally { this.working = false; }
   }
-  async reviewCandidate(session, run, candidate, cachedImage = null) {
+  async reviewCandidate(session: ReviewSession, run: ReviewRun, candidate: ReviewCandidate, cachedImage: Buffer | null = null): Promise<ReviewResult> {
     const started = performance.now();
-    const trace = [];
+    const trace: ReviewTrace[] = [];
     const image = cachedImage || await this.store.source(session);
     const evidenceStarted = performance.now();
     const first = await makeEvidence(image, session.image, candidate, "initial");
@@ -92,21 +115,22 @@ export class ReviewRunner {
     if (!second) return this.fallback(trace, started, run.provider_unavailable || "Follow-up unavailable or budget exhausted", run.provider_unavailable ? "unavailable" : "fallback");
     return this.terminal(second.action, trace, started);
   }
-  async call(session, run, candidate, evidence, wider, firstAction, trace, started) {
+  async call(session: ReviewSession, run: ReviewRun, candidate: ReviewCandidate, evidence: Evidence, wider: boolean,
+    firstAction: ReviewAction | null, trace: ReviewTrace[], started: number): Promise<{ action: ReviewAction } | null> {
     if (run.provider_unavailable) return null;
     const remaining = 720000 - (performance.now() - started);
     if (remaining <= 0) return null;
     const requestId = randomUUID();
-    if (!this.budget.reserve(requestId, `${run.id}:${candidate.id}`)) {
+    if (!this.budget!.reserve(requestId, `${run.id}:${candidate.id}`)) {
       run.provider_unavailable = "Jev's daily call allowance is exhausted";
       return null;
     }
-    trace.push({ type: "provider_call_started", request_id: requestId, wider, reserved_usd: this.budget.reservationUsd, at: now() });
-    await this.store.event(session, "provider_call_started", { run_id: run.id, candidate_id: candidate.id, request_id: requestId, wider, reserved_usd: this.budget.reservationUsd });
+    trace.push({ type: "provider_call_started", request_id: requestId, wider, reserved_usd: this.budget!.reservationUsd, at: now() });
+    await this.store.event(session, "provider_call_started", { run_id: run.id, candidate_id: candidate.id, request_id: requestId, wider, reserved_usd: this.budget!.reservationUsd });
     try {
-      const result = await this.provider({ candidate, evidence, wider, firstAction, timeout_ms: Math.min(remaining, session.demo ? 45000 : remaining) });
+      const result = await this.provider!({ candidate, evidence, wider, firstAction, timeout_ms: Math.min(remaining, session.demo ? 45000 : remaining) });
       const action = reviewDecision(result, { wider, ...run.policy });
-      this.budget.reconcile(requestId, result.cost_usd);
+      this.budget!.reconcile(requestId, result.cost_usd ?? null);
       const event = { type: "provider_call_completed", request_id: requestId, wider, action, response_id: result.response_id || null,
         raw_prediction: result.prediction, probabilities: result.probabilities,
         usage: result.usage || null, cost_usd: result.cost_usd ?? null, cost_basis: result.cost_basis || null,
@@ -115,20 +139,21 @@ export class ReviewRunner {
       await this.store.event(session, "provider_call_completed", { run_id: run.id, candidate_id: candidate.id, ...event });
       return { action };
     } catch (error) {
-      if (error.endpointUnavailable || ["TimeoutError", "AbortError"].includes(error.name)) run.provider_unavailable = "Jev's GPU endpoint is unavailable";
-      const event = { type: "provider_call_failed", request_id: requestId, wider, error: String(error.message).slice(0, 180), cost_usd: null, at: now() };
+      const failure = error as Error & { endpointUnavailable?: boolean };
+      if (failure.endpointUnavailable || ["TimeoutError", "AbortError"].includes(failure.name)) run.provider_unavailable = "Jev's GPU endpoint is unavailable";
+      const event = { type: "provider_call_failed", request_id: requestId, wider, error: String(failure.message).slice(0, 180), cost_usd: null, at: now() };
       trace.push(event);
       await this.store.event(session, "provider_call_failed", { run_id: run.id, candidate_id: candidate.id, ...event });
       return null;
     }
   }
-  terminal(action, trace, started) { return { ...action, status: "complete", trace, elapsed_ms: Math.round(performance.now() - started), human_review_required: true }; }
-  fallback(trace, started, explanation, status = "fallback") {
+  terminal(action: ReviewAction, trace: ReviewTrace[], started: number): ReviewResult { return { ...action, status: "complete", trace, elapsed_ms: Math.round(performance.now() - started), human_review_required: true }; }
+  fallback(trace: ReviewTrace[], started: number, explanation: string, status = "fallback"): ReviewResult {
     return { action: "send_to_human", verdict: "unsure", explanation, explanation_source: "application_rule",
       context_check: "unresolved", status, trace,
       elapsed_ms: Math.round(performance.now() - started), human_review_required: true };
   }
-  publicRun(session, run) {
+  publicRun(session: ReviewSession, run: ReviewRun) {
     return { ...run, results: Object.fromEntries(Object.entries(run.results).map(([id, result]) => {
       const candidate = session.candidates.find(item => item.id === id);
       const reviewed = Object.values(session.reviews).some(item => item.candidate_id === id && item.stage === "timed");

@@ -1,8 +1,12 @@
+import type { Point } from "./types.js";
+
+export type FanAxis = { a: Point; b: Point; center: Point; span: number; elongation: number; usable: boolean };
+
 const radToDeg = 180 / Math.PI;
-export const wrapDegrees = degrees => ((degrees % 360) + 360) % 360;
+export const wrapDegrees = (degrees: number): number => ((degrees % 360) + 360) % 360;
 
 // Area-weighted polygon moments avoid giving extra weight to jagged mask edges.
-export function polygonAxis(points) {
+export function polygonAxis(points: Point[]): FanAxis | null {
   if (!Array.isArray(points) || points.length < 3) return null;
   let twiceArea = 0, sx = 0, sy = 0, sxx = 0, syy = 0, sxy = 0;
   for (let i = 0; i < points.length; i++) {
@@ -30,34 +34,34 @@ export function polygonAxis(points) {
   let ux = Math.cos(theta), uy = Math.sin(theta);
   if (ux < 0 || (Math.abs(ux) < 1e-8 && uy < 0)) { ux = -ux; uy = -uy; }
   const projections = points.map(([x, y]) => (x - cx) * ux + (y - cy) * uy).sort((a, b) => a - b);
-  const quantile = q => {
+  const quantile = (q: number) => {
     const position = q * (projections.length - 1), low = Math.floor(position);
     return projections[low] + (projections[Math.ceil(position)] - projections[low]) * (position - low);
   };
   const low = quantile(.05), high = quantile(.95);
   const span = high - low, elongation = Math.sqrt(major / minor);
   return {
-    a: [cx + ux * low, cy + uy * low],
-    b: [cx + ux * high, cy + uy * high],
-    center: [cx, cy], span, elongation,
+    a: [cx + ux * low, cy + uy * low] as Point,
+    b: [cx + ux * high, cy + uy * high] as Point,
+    center: [cx, cy] as Point, span, elongation,
     usable: span >= 20 && elongation >= 1.5,
   };
 }
 
-export function directionEstimate(axis, sourceEnd, northImageDegrees = null) {
-  if (!axis?.usable || !["a", "b"].includes(sourceEnd)) return null;
+export function directionEstimate(axis: FanAxis | null, sourceEnd: "a" | "b" | null, northImageDegrees: number | null = null) {
+  if (!axis?.usable || (sourceEnd !== "a" && sourceEnd !== "b")) return null;
   const source = axis[sourceEnd], tip = axis[sourceEnd === "a" ? "b" : "a"];
   const imageDegrees = wrapDegrees(Math.atan2(tip[0] - source[0], source[1] - tip[1]) * radToDeg);
-  const hasNorth = Number.isFinite(northImageDegrees);
+  const hasNorth = northImageDegrees !== null && Number.isFinite(northImageDegrees);
   const towardDegrees = hasNorth ? wrapDegrees(imageDegrees - northImageDegrees) : null;
   return {
     source, tip, imageDegrees,
     towardDegrees,
-    fromDegrees: hasNorth ? wrapDegrees(towardDegrees + 180) : null,
+    fromDegrees: towardDegrees !== null ? wrapDegrees(towardDegrees + 180) : null,
   };
 }
 
-export function circularSummary(degrees) {
+export function circularSummary(degrees: number[]) {
   if (!degrees.length) return { count: 0, meanDegrees: null, agreement: null };
   const east = degrees.reduce((sum, value) => sum + Math.sin(value / radToDeg), 0);
   const north = degrees.reduce((sum, value) => sum + Math.cos(value / radToDeg), 0);
@@ -69,7 +73,7 @@ export function circularSummary(degrees) {
   };
 }
 
-export function compassPoint(degrees) {
+export function compassPoint(degrees: number): string {
   const points = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"];
   return points[Math.round(wrapDegrees(degrees) / 22.5) % points.length];
 }

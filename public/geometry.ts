@@ -1,4 +1,6 @@
-export function bounds(points) {
+import type { Point, Proposal, Region, Size } from "./types.js";
+
+export function bounds(points: Point[]): Region {
   return {
     x: Math.min(...points.map((p) => p[0])),
     y: Math.min(...points.map((p) => p[1])),
@@ -10,7 +12,7 @@ export function bounds(points) {
       Math.min(...points.map((p) => p[1])),
   };
 }
-export function clipRegion(region, image) {
+export function clipRegion(region: Region, image: Size): Region {
   const x = Math.max(0, Math.floor(region.x)),
     y = Math.max(0, Math.floor(region.y));
   const right = Math.min(image.width, Math.ceil(region.x + region.width)),
@@ -24,7 +26,7 @@ export function clipRegion(region, image) {
   return { x, y, width: right - x, height: bottom - y };
 }
 export function tilesForRegion(
-  region,
+  region: Region,
   scale = 1,
   tileSize = 1024,
   overlap = 128,
@@ -33,10 +35,10 @@ export function tilesForRegion(
     throw new Error("Invalid tile settings");
   const size = tileSize * scale,
     stride = (tileSize - overlap) * scale;
-  const starts = (length) => {
+  const starts = (length: number) => {
     const values = [0];
-    while (values.at(-1) + size < length)
-      values.push(Math.min(length - size, values.at(-1) + stride));
+    while (values[values.length - 1] + size < length)
+      values.push(Math.min(length - size, values[values.length - 1] + stride));
     return values;
   };
   return starts(region.height).flatMap((y) =>
@@ -49,16 +51,16 @@ export function tilesForRegion(
     })),
   );
 }
-export function mapPoints(points, region, input) {
+export function mapPoints(points: Array<Point | { x: number; y: number }>, region: Region, input: Size): Point[] {
   return points.map((p) => {
     const [x, y] = Array.isArray(p) ? p : [p.x, p.y];
     return [
       region.x + (Number(x) * region.width) / input.width,
       region.y + (Number(y) * region.height) / input.height,
-    ];
+    ] as Point;
   });
 }
-export function inside(point, polygon) {
+export function inside(point: Point, polygon: Point[]): boolean {
   let hit = false;
   const [x, y] = point;
   for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
@@ -72,7 +74,7 @@ export function inside(point, polygon) {
   }
   return hit;
 }
-export function maskIoU(a, b) {
+export function maskIoU(a: Point[], b: Point[]): number {
   const aa = bounds(a),
     bb = bounds(b),
     left = Math.min(aa.x, bb.x),
@@ -90,7 +92,7 @@ export function maskIoU(a, b) {
     union = 0;
   for (let y = 0; y < 48; y++)
     for (let x = 0; x < 48; x++) {
-      const p = [
+      const p: Point = [
           left + ((x + 0.5) * (right - left)) / 48,
           top + ((y + 0.5) * (bottom - top)) / 48,
         ],
@@ -101,8 +103,8 @@ export function maskIoU(a, b) {
     }
   return union ? intersection / union : 0;
 }
-export function mergeCandidates(items) {
-  const kept = [];
+export function mergeCandidates<T extends Proposal>(items: T[]): Array<T & { duplicate_ids: string[] }> {
+  const kept: Array<T & { duplicate_ids: string[] }> = [];
   for (const item of [...items].sort(
     (a, b) =>
       Number(a.clipped) - Number(b.clipped) || b.confidence - a.confidence,
@@ -123,7 +125,7 @@ export function mergeCandidates(items) {
       b.confidence * Math.sqrt(b.area) - a.confidence * Math.sqrt(a.area),
   );
 }
-export function candidateRegion(candidate, image, expansion = 2.6) {
+export function candidateRegion(candidate: Pick<Proposal, "polygon">, image: Size, expansion = 2.6): Region {
   const b = bounds(candidate.polygon),
     side = Math.ceil(Math.max(160, b.width, b.height) * expansion);
   return clipRegion(

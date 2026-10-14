@@ -31,6 +31,8 @@ npm ci
 npm start
 ```
 
+The browser, Node server, shared analysis code, and Cloudflare proxy are authored in TypeScript. `npm start` builds the generated JavaScript before launching the server. Run `npm run typecheck` for strict static checks or `npm test` for the type check and regression suite. Generated `.js` and `.mjs` files are ignored by Git; run `npm run build` after a fresh clone before invoking a script directly with `node`.
+
 Open <http://127.0.0.1:4173>. The existing local `.env.local` contains the configured Roboflow API key; it is ignored and must not be committed or shared. On another computer, copy `.env.example` to `.env.local` and set `ROBOFLOW_API_KEY`, `ROBOFLOW_MODEL_ID`, and `ROBOFLOW_MODEL_TRAINING=0`. The server keeps the key out of browser assets. The primary app requires a live model connection; a replay is available only in the clearly labeled historical atlas.
 
 For a walkthrough, enter the meeting code and let the home page scan the bundled **Spiders in Manhattan** crop. Select a proposed region to inspect its source pixels, then optionally trace the selected region with SAM 3 and explore its diffuse extent. The source crop is from [HiRISE ESP_082142_0935](https://hirise.lpl.arizona.edu/hipod/ESP_082142_0935), captured February 3, 2024. The outlines are review suggestions, not confirmed fan discoveries.
