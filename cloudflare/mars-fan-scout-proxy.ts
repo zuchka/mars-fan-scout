@@ -3,7 +3,7 @@
 const UPSTREAM = "mcp-mars-fan-scout-b3l3w.sprites.app";
 
 export default {
-  async fetch(request) {
+  async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
     url.hostname = UPSTREAM;
     url.protocol = "https:";
