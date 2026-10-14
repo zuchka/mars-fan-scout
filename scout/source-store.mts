@@ -14,10 +14,20 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import sharp from "sharp";
 import { clipRegion } from "../public/geometry.js";
+import type { Region } from "../public/types.js";
+import type { RegionImage, SourceMeta } from "./types.js";
 const exec = promisify(execFile);
-export const sha = (bytes) => createHash("sha256").update(bytes).digest("hex");
+export const sha = (bytes: string | Uint8Array): string => createHash("sha256").update(bytes).digest("hex");
 export class SourceStore {
-  constructor(root, directory, options = {}) {
+  root: string;
+  directory: string;
+  orbitPath: string | undefined;
+  python: string;
+  pending: Map<string, Promise<unknown>>;
+  uploadQueue: Promise<unknown>;
+  maxSourceBytes: number;
+
+  constructor(root: string, directory: string, options: { orbitPath?: string; python?: string; maxSourceBytes?: number } = {}) {
     this.root = root;
     this.directory = directory;
     this.orbitPath = options.orbitPath;
@@ -44,7 +54,7 @@ export class SourceStore {
     }
     await this.pruneCache();
   }
-  async usage(directory = this.directory) {
+  async usage(directory = this.directory): Promise<number> {
     let size = 0;
     for (const entry of await readdir(directory, { withFileTypes: true })) {
       const path = join(directory, entry.name);
@@ -70,36 +80,36 @@ export class SourceStore {
         await unlink(join(dir, file.name)).catch(() => {});
     }
   }
-  async meta(id) {
+  async meta(id: string): Promise<SourceMeta> {
     if (["sample", "orbit"].includes(id)) {
       if (id === "orbit" && !this.orbitPath)
         throw new Error("Full observation is not configured on this server");
       return JSON.parse(
         await readFile(join(this.root, "public/sources", `${id}.json`), "utf8"),
-      );
+      ) as SourceMeta;
     }
     if (!/^[a-f0-9]{64}$/.test(id)) throw new Error("Unknown source");
     return JSON.parse(
       await readFile(join(this.directory, id, "manifest.json"), "utf8"),
-    );
+    ) as SourceMeta;
   }
-  add(bytes, name) {
+  add(bytes: Buffer, name: string): Promise<SourceMeta> {
     const next = this.uploadQueue
       .catch(() => {})
       .then(() => this.addOriginal(bytes, name));
     this.uploadQueue = next;
     return next;
   }
-  async addOriginal(bytes, name) {
+  async addOriginal(bytes: Buffer, name: string): Promise<SourceMeta> {
     if (bytes.length > 32 * 1024 * 1024)
       throw new Error("Choose an image under 32 MiB");
     const info = await sharp(bytes, {
       limitInputPixels: 16_777_216,
     }).metadata();
     if (
-      !["png", "jpeg", "webp"].includes(info.format) ||
-      info.pages > 1 ||
-      info.width < 256 ||
+      !info.format || !["png", "jpeg", "webp"].includes(info.format) ||
+      (info.pages ?? 1) > 1 ||
+      !info.width || !info.height || info.width < 256 ||
       info.height < 256 ||
       info.width * info.height > 16_777_216
     )
@@ -138,7 +148,7 @@ export class SourceStore {
       })
       .jpeg({ quality: 92 })
       .toFile(join(dir, "preview.jpg"));
-    const meta = {
+    const meta: SourceMeta & Record<string, unknown> = {
       id,
       name: String(name || "Uploaded Mars crop").slice(0, 160),
       width: display.info.width,
@@ -169,15 +179,15 @@ export class SourceStore {
     await rename(join(dir, "manifest.tmp"), join(dir, "manifest.json"));
     return meta;
   }
-  async original(id) {
+  async original(id: string): Promise<string> {
     await this.meta(id);
     return id === "sample"
       ? join(this.root, "assets/scout-native-16.png")
       : id === "orbit"
-        ? this.orbitPath
+        ? this.orbitPath!
         : join(this.directory, id, "original");
   }
-  async preview(id) {
+  async preview(id: string): Promise<Buffer> {
     const meta = await this.meta(id);
     return readFile(
       ["sample", "orbit"].includes(id)
@@ -185,7 +195,7 @@ export class SourceStore {
         : join(this.directory, id, "preview.jpg"),
     );
   }
-  async region(id, requested, max = 1024, { analysisScale = 1 } = {}) {
+  async region(id: string, requested: Region, max = 1024, { analysisScale = 1 }: { analysisScale?: number } = {}): Promise<RegionImage> {
     const meta = await this.meta(id),
       region = clipRegion(requested, meta);
     if (!Number.isInteger(max) || max < 64 || max > 2048)
@@ -200,7 +210,7 @@ export class SourceStore {
       width: Math.max(1, Math.round(region.width * scale)),
       height: Math.max(1, Math.round(region.height * scale)),
     };
-    let input;
+    let input: Buffer;
     if (id === "orbit") {
       const key = sha(
           Buffer.from(
@@ -225,7 +235,7 @@ export class SourceStore {
               this.python,
               [
                 join(this.root, "scripts/read_native_region.py"),
-                this.orbitPath,
+                this.orbitPath!,
                 path,
                 JSON.stringify(region),
                 String(Math.max(output.width, output.height)),
