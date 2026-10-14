@@ -7,8 +7,6 @@
     "types": ["node"],
     "strict": true,
     "noEmit": true,
-    "allowJs": true,
-    "checkJs": false,
     "skipLibCheck": true,
     "noUncheckedIndexedAccess": false
   },

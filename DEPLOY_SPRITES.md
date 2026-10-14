@@ -17,6 +17,7 @@ The official [Sprites MCP endpoint](https://fly.io/sprites/ecosystem/) is `https
    sprite create mcp-mars-fan-scout
    sprite use mcp-mars-fan-scout
    sprite exec -- git clone https://github.com/zuchka/mars-fan-scout.git /home/sprite/mars-fan-scout
+   sprite exec -- sh -lc 'cd /home/sprite/mars-fan-scout && npm ci && npm run build'
    ```
 
 3. Copy the existing local `.env.local` to a separate ignored `.env.sprite` file. Set `HOST=0.0.0.0`, `PORT=8080`, `DEMO_DAILY_LIMIT=100`, and a long, randomly generated `DEMO_ACCESS_CODE`. Keep `ROBOFLOW_API_KEY` and the model ID. Do not commit either environment file. Upload the deployment copy using `sprite file push .env.sprite /home/sprite/mars-fan-scout/.env.local`, then run `sprite exec -- chmod 600 /home/sprite/mars-fan-scout/.env.local`.
@@ -30,11 +31,11 @@ The official [Sprites MCP endpoint](https://fly.io/sprites/ecosystem/) is `https
 
 The daily limit counts **Roboflow requests**: one for each RF-DETR image crop and one more when SAM 3 tracing is requested. The native pipeline preserves uploads and extracts bounded PNG tiles for inference. The allowance resets at midnight UTC and is kept in the Sprite's persistent filesystem. The limit is a demonstration cost guard, not a substitute for a provider-side budget. A reservation counts even when Roboflow returns an error.
 
-For updates, push source changes to GitHub, then run `sprite exec -- git -C /home/sprite/mars-fan-scout pull --ff-only` and `sprite exec -- sprite-env services restart mars-fan-scout`. Never put the API key or meeting code into a public repository, browser asset, or URL. The native pipeline retains exact uploaded bytes and derivatives in `.scout/sources/`, and persists job results in `.scout/jobs/`. Browser review decisions use IndexedDB. Preserve these directories and `.demo-usage.json` through upgrades and rollback.
+For updates, push source changes to GitHub, then run `sprite exec -- git -C /home/sprite/mars-fan-scout pull --ff-only`, `sprite exec -- sh -lc 'cd /home/sprite/mars-fan-scout && npm ci && npm run build'`, and `sprite exec -- sprite-env services restart mars-fan-scout`. Never put the API key or meeting code into a public repository, browser asset, or URL. The native pipeline retains exact uploaded bytes and derivatives in `.scout/sources/`, and persists job results in `.scout/jobs/`. Browser review decisions use IndexedDB. Preserve these directories and `.demo-usage.json` through upgrades and rollback.
 
 ## Custom domain
 
-Sprites currently provide a `*.sprites.app` URL but no native custom-hostname/certificate setup. The `zuchka studios` Cloudflare account has Worker `mars-fan-scout-proxy` with `mars.zuchka.dev` attached as a Production Custom Domain. Cloudflare automatically created the DNS record and certificate. The deployed Worker code is mirrored in [`cloudflare/mars-fan-scout-proxy.js`](cloudflare/mars-fan-scout-proxy.js); edit/deploy it in the Cloudflare Worker dashboard if its upstream URL changes. The Worker forwards the original path, method, body, and headers—including the meeting-code header—to the Sprite. The Sprite remains publicly reachable at its own URL.
+Sprites currently provide a `*.sprites.app` URL but no native custom-hostname/certificate setup. The `zuchka studios` Cloudflare account has Worker `mars-fan-scout-proxy` with `mars.zuchka.dev` attached as a Production Custom Domain. Cloudflare automatically created the DNS record and certificate. The Worker source is [`cloudflare/mars-fan-scout-proxy.ts`](cloudflare/mars-fan-scout-proxy.ts); run `npm run build` and deploy the generated `cloudflare/mars-fan-scout-proxy.js` if its upstream URL changes. The Worker forwards the original path, method, body, and headers—including the meeting-code header—to the Sprite. The Sprite remains publicly reachable at its own URL.
 
 Check `https://mars.zuchka.dev/api/status` for `scout_ready: true`. A successful page load also confirms the Cloudflare certificate and proxy route. The Worker itself does not store the Roboflow key or meeting code.
 

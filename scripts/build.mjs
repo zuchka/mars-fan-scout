@@ -1,4 +1,4 @@
-import { access, readdir, readFile, writeFile } from "node:fs/promises";
+import { readdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { transform } from "esbuild";
 
@@ -9,17 +9,12 @@ async function collect(directory) {
   for (const entry of await readdir(directory, { withFileTypes: true })) {
     const path = join(directory, entry.name);
     if (entry.isDirectory()) await collect(path);
-    else if (/\.m?ts$/.test(entry.name)) sources.push(path);
+    else if (/\.m?ts$/.test(entry.name) && !/(?:^types|-types)\.ts$/.test(entry.name)) sources.push(path);
   }
 }
 
 for (const root of roots) await collect(root);
-for (const path of ["server.mts", "demo-access.mts"]) {
-  try {
-    await access(path);
-    sources.push(path);
-  } catch { /* The runtime entry points are migrated in later commits. */ }
-}
+sources.push("server.mts", "demo-access.mts");
 for (const source of sources) {
   const output = source.replace(/\.mts$/, ".mjs").replace(/\.ts$/, ".js");
   const input = await readFile(source, "utf8");

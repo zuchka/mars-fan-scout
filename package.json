@@ -11,12 +11,12 @@
     "typecheck": "tsc --noEmit",
     "start": "npm run build --silent && node server.mjs",
     "test": "npm run build --silent && npm run typecheck --silent && node --test scripts/*.test.mjs",
-    "prepare:agent-review": "node scripts/prepare_agent_review.mjs",
-    "report:agent-review": "node scripts/report_agent_review.mjs",
-    "purge:agent-review": "node scripts/purge_review_sessions.mjs",
-    "prepare:boundary-review": "node scripts/prepare_boundary_review.mjs",
-    "score:boundaries": "node scripts/score_boundaries.mjs",
-    "validate:benchmark": "node scripts/validate_boundary_benchmark.mjs"
+    "prepare:agent-review": "npm run build --silent && node scripts/prepare_agent_review.mjs",
+    "report:agent-review": "npm run build --silent && node scripts/report_agent_review.mjs",
+    "purge:agent-review": "npm run build --silent && node scripts/purge_review_sessions.mjs",
+    "prepare:boundary-review": "npm run build --silent && node scripts/prepare_boundary_review.mjs",
+    "score:boundaries": "npm run build --silent && node scripts/score_boundaries.mjs",
+    "validate:benchmark": "npm run build --silent && node scripts/validate_boundary_benchmark.mjs"
   },
   "repository": {
     "type": "git",
